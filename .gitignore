@@ -1,0 +1,23 @@
+# Next.js
+.next/
+out/
+dist/
+build/
+
+# Entornos y credenciales
+.env
+.env.*
+
+# Dependencias
+node_modules/
+
+# Python
+__pycache__/
+*.pyc
+.venv/
+venv/
+
+# Varios
+*.msi
+*.exe
+.DS_Store

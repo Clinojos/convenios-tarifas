@@ -1,0 +1,71 @@
+@import "tailwindcss";
+
+:root {
+  color-scheme: light;
+
+  /* Base */
+  --background: #ffffff;
+  --foreground: #171717;
+
+  /* Variables reales */
+  --primary: #1AA3D8;
+  --primary-dark: #1E56A6;
+
+  --green: #8CC63F;
+  --yellow: #FFF200;
+  --orange: #F9A01B;
+  --orange-dark: #F15A24;
+  --red: #ED1C24;
+  --magenta: #D4147E;
+  --purple: #92278F;
+
+  --success: #8CC63F;
+  --warning: #F9A01B;
+  --danger: #ED1C24;
+  --info: #1AA3D8;
+  --navy: #2E3192; 
+}
+
+@theme inline {
+  --color-background: var(--background);
+  --color-foreground: var(--foreground);
+
+  --color-primary: var(--primary);
+  --color-primary-dark: var(--primary-dark);
+
+  --color-green: var(--green);
+  --color-yellow: var(--yellow);
+  --color-orange: var(--orange);
+  --color-orange-dark: var(--orange-dark);
+  --color-red: var(--red);
+  --color-magenta: var(--magenta);
+  --color-purple: var(--purple);
+
+  --color-success: var(--success);
+  --color-warning: var(--warning);
+  --color-danger: var(--danger);
+  --color-info: var(--info);
+
+  --font-sans: var(--font-poppins);
+  --color-navy: var(--navy);
+}
+
+body {
+  background: var(--background);
+  color: var(--foreground);
+  font-family: var(--font-sans), sans-serif;
+}
+
+@keyframes blob-float {
+  0%,
+  100% {
+    transform: translateY(0) scale(1);
+  }
+  50% {
+    transform: translateY(-10px) scale(1.05);
+  }
+}
+
+.animate-blob-float {
+  animation: blob-float 6s ease-in-out infinite;
+}
