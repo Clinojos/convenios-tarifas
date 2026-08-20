@@ -108,7 +108,7 @@ function LoginContent() {
           </div>
 
           <div className="mb-8">
-            <h2 className="text-2xl font-bold text-navy">Bienvenido de vuelta</h2>
+            <h2 className="text-2xl font-bold text-navy">Bienvenido de vuelta prueba para el servidor de ubuntu</h2>
             <p className="mt-1 text-[13px] text-slate-500 font-medium">
               Ingresa con tu usuario para continuar.
             </p>
