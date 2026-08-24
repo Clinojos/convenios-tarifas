@@ -497,6 +497,13 @@ def get_agreement_detail(
         select(Company).where(Company.company_nit == company_key)
     ).first() if company_key else None
 
+    # NUEVO: nombre real de la empresa matriz (razón social) desde TERCEROS,
+    # mismo criterio que /groups y /groups/{group_key}.
+    company_name = None
+    if company_key:
+        terceros_map = _get_terceros_names(session, [company_key])
+        company_name = terceros_map.get(company_key)
+
     details = local_session.exec(
         select(AgreementDetails).where(AgreementDetails.contract_key == contract_key)
     ).first()
@@ -517,6 +524,7 @@ def get_agreement_detail(
 
     return {
         **base,
+        "company_name": company_name,  # NUEVO
         # entidad
         "address": meta.address if meta else None,
         "phone": meta.phone if meta else None,

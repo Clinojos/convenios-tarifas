@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { Search, Layers, ChevronLeft, ChevronRight } from "lucide-react";
 import { useTarifario } from "@/hooks/useTarifario";
 
@@ -13,9 +13,19 @@ interface TarifarioBlockProps {
   // Se llama con la cantidad de portafolios apenas se resuelve el fetch,
   // para que ConvenioHeader pueda mostrar "N portafolios" en el badge.
   onPortfoliosChange?: (count: number) => void;
+  // Llegan desde el buscador global (ver page.tsx): si el usuario clickeó
+  // un resultado de tipo "Procedimiento", acá viene en qué portafolio está
+  // y qué código hay que resaltar/llevar a la vista.
+  initialPortfolio?: string;
+  highlightCode?: string;
 }
 
-export function TarifarioBlock({ contractKey, onPortfoliosChange }: TarifarioBlockProps) {
+export function TarifarioBlock({
+  contractKey,
+  onPortfoliosChange,
+  initialPortfolio,
+  highlightCode,
+}: TarifarioBlockProps) {
   const {
     portfolios,
     loadingPortfolios,
@@ -32,18 +42,51 @@ export function TarifarioBlock({ contractKey, onPortfoliosChange }: TarifarioBlo
   const [activePortfolio, setActivePortfolio] = useState<string | null>(null);
   const [search, setSearch] = useState("");
 
-  // 1. Al montar, trae los portafolios reales del convenio
+  // Fila que hay que resaltar/scrollear cuando se llega desde el buscador.
+  // didScrollRef evita que el scroll se repita en cada render; se resetea
+  // cuando llega un highlightCode nuevo (el usuario buscó otro procedimiento
+  // sin salir de este convenio, ver efecto 1).
+  const highlightRowRef = useRef<HTMLTableRowElement | null>(null);
+  const didScrollRef = useRef(false);
+
+  // 1. Al montar (o si cambia el convenio, o llega un highlight nuevo desde
+  // el buscador global), trae los portafolios reales del convenio.
   useEffect(() => {
+    didScrollRef.current = false; // nuevo highlight -> permitir scroll de nuevo
+
     fetchPortfolios().then((data) => {
-      if (data.length > 0) setActivePortfolio(data[0].code);
+      if (data.length > 0) {
+        const target =
+          initialPortfolio && data.some((p) => p.code === initialPortfolio)
+            ? initialPortfolio
+            : data[0].code;
+
+        if (target === activePortfolio) {
+          // Ya estábamos en ese portafolio (típico: el usuario busca otro
+          // procedimiento del mismo tab). Como el portafolio activo no
+          // cambia, el efecto 2 no se dispara solo, así que forzamos
+          // el fetch acá con el nuevo código a resaltar.
+          fetchItems(target, highlightCode || undefined, 1);
+          setSearch(highlightCode || "");
+        } else {
+          setActivePortfolio(target);
+        }
+      }
       onPortfoliosChange?.(data.length);
     });
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [contractKey]);
+  }, [contractKey, highlightCode]);
 
-  // 2. Cuando cambia el portafolio activo, trae su primera página
+  // 2. Cuando cambia el portafolio activo, trae su primera página.
+  // Si venimos del buscador, precargamos el search con el código a
+  // resaltar para que la fila caiga sí o sí dentro de la página 1.
   useEffect(() => {
-    if (activePortfolio) fetchItems(activePortfolio, search || undefined, 1);
+    if (!activePortfolio) return;
+    if (highlightCode && !didScrollRef.current) {
+      setSearch(highlightCode);
+    } else {
+      fetchItems(activePortfolio, search || undefined, 1);
+    }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [activePortfolio]);
 
@@ -57,6 +100,17 @@ export function TarifarioBlock({ contractKey, onPortfoliosChange }: TarifarioBlo
     return () => clearTimeout(timeout);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [search]);
+
+  // 4. Cuando llegan los items y hay un código para resaltar, hace scroll
+  // suave hasta la fila la primera vez que aparece.
+  useEffect(() => {
+    if (!highlightCode || didScrollRef.current) return;
+    const found = items.some((item) => item.proc_code === highlightCode);
+    if (found && highlightRowRef.current) {
+      highlightRowRef.current.scrollIntoView({ block: "center", behavior: "smooth" });
+      didScrollRef.current = true;
+    }
+  }, [items, highlightCode]);
 
   const totalPages = Math.max(1, Math.ceil(total / limit));
 
@@ -144,40 +198,63 @@ export function TarifarioBlock({ contractKey, onPortfoliosChange }: TarifarioBlo
       ) : items.length > 0 ? (
         <>
           <div className="mt-3 overflow-x-auto">
-            <table className="w-full text-[12px]">
+            <table className="w-full text-[12px] border-separate border-spacing-0">
               <thead>
                 <tr className="text-left text-slate-400 text-[10px] uppercase tracking-wide">
                   <th className="font-medium pb-2">Código CUPS</th>
                   <th className="font-medium pb-2">Descripción del servicio</th>
                   <th className="font-medium pb-2">Tarifa</th>
-                  <th className="font-medium pb-2 text-right">Valor base</th>
-                  <th className="font-medium pb-2 text-right">%</th>
-                  <th className="font-medium pb-2 text-right">Valor final</th>
+                  <th className="font-medium pb-2 text-right">Valor</th>
                   <th className="font-medium pb-2">Autorización</th>
                 </tr>
               </thead>
               <tbody>
-                {items.map((item) => (
-                  <tr key={item.proc_code} className="border-t border-slate-50">
-                    <td className="py-2 text-navy font-medium">{item.proc_code}</td>
-                    <td className="py-2 text-slate-700">{item.proc_name}</td>
-                    <td className="py-2">
-                      <span className="inline-block text-[10px] font-medium px-2 py-0.5 rounded-full bg-slate-50 text-slate-500">
-                        {item.tariff_name || item.tariff_code}
-                      </span>
-                    </td>
-                    <td className="py-2 text-right text-slate-500">{formatCOP(item.base_price)}</td>
-                    <td className="py-2 text-right text-slate-500">{item.percent}%</td>
-                    <td className="py-2 text-right text-navy font-medium">{formatCOP(item.final_price)}</td>
-                    <td className="py-2">
-                      {item.requires_auth ? (
-                        <span className="text-[10px] font-medium px-2 py-0.5 rounded-full bg-amber-50 text-amber-600">Sí</span>
-                      ) : (
-                        <span className="text-[10px] font-medium px-2 py-0.5 rounded-full bg-slate-50 text-slate-400">No</span>
-                      )}
-                    </td>
-                  </tr>
-                ))}
+                {items.map((item) => {
+                  const isHighlighted = item.proc_code === highlightCode;
+                  // Si hay un precio real cargado (final_price > 0), es un
+                  // ítem de valor fijo -> se muestra el precio en pesos.
+                  // Si no tiene precio (los ISS), el cajero solo necesita
+                  // el porcentaje: el valor lo saca de su propio Excel.
+                  const hasFixedPrice = item.final_price > 0;
+
+                  return (
+                    <tr
+                      key={item.proc_code}
+                      ref={isHighlighted ? highlightRowRef : undefined}
+                      className={isHighlighted ? "bg-primary/5" : "border-t border-slate-50"}
+                    >
+                      <td
+                        className={`py-2 text-navy font-medium ${
+                          isHighlighted ? "border-y-2 border-l-2 border-primary/60 rounded-l-lg pl-2" : ""
+                        }`}
+                      >
+                        {item.proc_code}
+                      </td>
+                      <td className={`py-2 text-slate-700 ${isHighlighted ? "border-y-2 border-primary/60" : ""}`}>
+                        {item.proc_name}
+                      </td>
+                      <td className={`py-2 ${isHighlighted ? "border-y-2 border-primary/60" : ""}`}>
+                        <span className="inline-block text-[10px] font-medium px-2 py-0.5 rounded-full bg-slate-50 text-slate-500">
+                          {item.tariff_name || item.tariff_code}
+                        </span>
+                      </td>
+                      <td className={`py-2 text-right font-medium ${isHighlighted ? "border-y-2 border-primary/60" : ""} ${hasFixedPrice ? "text-navy" : "text-slate-500"}`}>
+                        {hasFixedPrice ? formatCOP(item.final_price) : `${item.percent}%`}
+                      </td>
+                      <td
+                        className={`py-2 ${
+                          isHighlighted ? "border-y-2 border-r-2 border-primary/60 rounded-r-lg" : ""
+                        }`}
+                      >
+                        {item.requires_auth ? (
+                          <span className="text-[10px] font-medium px-2 py-0.5 rounded-full bg-amber-50 text-amber-600">Sí</span>
+                        ) : (
+                          <span className="text-[10px] font-medium px-2 py-0.5 rounded-full bg-slate-50 text-slate-400">No</span>
+                        )}
+                      </td>
+                    </tr>
+                  );
+                })}
               </tbody>
             </table>
           </div>

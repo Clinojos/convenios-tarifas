@@ -1,9 +1,10 @@
+// components/convenios/ServiciosContratados.tsx
 "use client";
 
 import { ClipboardList } from "lucide-react";
 import { SeccionCard } from "@/components/convenios/SeccionCard";
 
-const DASH = "—";
+const DASH = "Sin informacion registrada";
 
 function val(v: string | number | null | undefined): string {
   if (v === null || v === undefined || v === "") return DASH;
@@ -15,8 +16,6 @@ interface ServiciosContratadosProps {
   hiddenSections: string[];
   isEditing: boolean;
   onToggle: (key: string) => void;
-  draftServices: string;
-  setDraftServices: (v: string) => void;
 }
 
 const SECTION_KEY = "servicios";
@@ -26,8 +25,6 @@ export function ServiciosContratados({
   hiddenSections,
   isEditing,
   onToggle,
-  draftServices,
-  setDraftServices,
 }: ServiciosContratadosProps) {
   return (
     <SeccionCard
@@ -38,17 +35,7 @@ export function ServiciosContratados({
       isEditing={isEditing}
       onToggle={onToggle}
     >
-      {isEditing ? (
-        <textarea
-          value={draftServices}
-          onChange={(e) => setDraftServices(e.target.value)}
-          rows={4}
-          className="w-full text-[12px] border border-slate-200 rounded-lg p-2 outline-none focus:border-primary resize-none"
-          placeholder="Describí los servicios contratados..."
-        />
-      ) : (
-        val(contractedServices)
-      )}
+      {val(contractedServices)}
     </SeccionCard>
   );
 }
