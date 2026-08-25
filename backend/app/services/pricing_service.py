@@ -48,6 +48,7 @@ from sqlmodel import func
 def get_portfolios_by_contract(session: Session, nit: str):
     stmt = (
         select(Portfolio)
+        .distinct()
         .join(AgreementPortfolio, AgreementPortfolio.PTCodi == Portfolio.PTCodi)
         .where(AgreementPortfolio.MENNIT == nit)
     )

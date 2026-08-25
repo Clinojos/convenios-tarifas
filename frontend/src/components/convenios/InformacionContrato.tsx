@@ -1,13 +1,28 @@
 "use client";
 
 import { CalendarDays } from "lucide-react";
-import { SeccionHeader } from "@/components/convenios/SeccionHeader";
+import { SeccionCard } from "@/components/convenios/SeccionCard";
 
 const DASH = "—";
 
 function val(v: string | number | null | undefined): string {
   if (v === null || v === undefined || v === "") return DASH;
   return String(v);
+}
+
+function Field({
+  label,
+  value,
+}: {
+  label: string;
+  value: string | number | null | undefined;
+}) {
+  return (
+    <div className="min-w-0">
+      <p className="text-slate-500 leading-tight mb-0.5">{label}: </p>
+      <p className="text-slate-700 break-words leading-snug">{val(value)}</p>
+    </div>
+  );
 }
 
 interface InformacionContratoProps {
@@ -24,18 +39,16 @@ export function InformacionContrato({
   autoRenewal,
 }: InformacionContratoProps) {
   return (
-    <>
-      <SeccionHeader
-        icon={<CalendarDays size={13} className="text-slate-400" />}
-        titulo="Información del contrato"
-        className="mt-3 pt-3 border-t border-slate-50"
-      />
-      <div className="mt-2 flex flex-wrap gap-4 text-[12px] text-slate-600">
-        <span><span className="text-slate-400">Fecha inicio del contrato: </span>{val(startDate)}</span>
-        <span><span className="text-slate-400">Último incremento tarifario: </span>{val(lastRateIncrease)}</span>
-        <span><span className="text-slate-400">Vencimiento: </span>{val(expirationDate)}</span>
-        <span><span className="text-slate-400">Prórroga: </span>{val(autoRenewal)}</span>
+    <SeccionCard
+      icon={<CalendarDays size={14} className="text-primary" />}
+      titulo="Información del contrato"
+    >
+      <div className="grid grid-cols-1 gap-x-4 gap-y-3 sm:grid-cols-2">
+        <Field label="Fecha inicio del contrato" value={startDate} />
+        <Field label="Último incremento tarifario" value={lastRateIncrease} />
+        <Field label="Vencimiento" value={expirationDate} />
+        <Field label="Prórroga" value={autoRenewal} />
       </div>
-    </>
+    </SeccionCard>
   );
 }
