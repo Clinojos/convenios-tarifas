@@ -1,6 +1,6 @@
 "use client";
 
-import { Hash, FileBarChart, AlertTriangle, ImageOff, Percent, Calendar, Layers } from "lucide-react";
+import { FileBarChart, AlertTriangle, ImageOff, Percent, Calendar } from "lucide-react";
 import { ACCENT_COLORS } from "./constants";
 import type { ConvenioGroup } from "./types";
 
@@ -10,21 +10,23 @@ interface ConvenioCardProps {
   onOpen: (convenio: ConvenioGroup) => void;
 }
 
-function getStatusBadge(active: number, total: number) {
+// Un solo indicador de estado en vez de dos pastillas separadas
+// (antes: "N convenios" + "activo/inactivo" compitiendo por atención).
+function getStatusDot(active: number, total: number) {
   if (total === 0 || active === 0) {
-    return { label: "Inactivo", className: "bg-slate-100 text-slate-400" };
+    return { color: "bg-slate-300", label: "Inactivo" };
   }
   if (active === total) {
-    return { label: "Activo", className: "bg-green/10 text-green" };
+    return { color: "bg-green", label: "Activo" };
   }
-  return { label: `${active}/${total} activos`, className: "bg-amber-50 text-amber-600" };
+  return { color: "bg-amber-400", label: `${active}/${total} activos` };
 }
 
 export function ConvenioCard({ convenio: g, index: i, onOpen }: ConvenioCardProps) {
   const esDescuento = g.type === "descuento";
   const sinTarifario = g.tarifario_status === "sin_tarifario";
   const pendienteDigitacion = g.tarifario_status === "pendiente_digitacion";
-  const statusBadge = getStatusBadge(g.active_variants, g.total_variants);
+  const status = getStatusDot(g.active_variants, g.total_variants);
 
   return (
     <div
@@ -34,14 +36,15 @@ export function ConvenioCard({ convenio: g, index: i, onOpen }: ConvenioCardProp
       onKeyDown={(e) => {
         if (e.key === "Enter" || e.key === " ") onOpen(g);
       }}
-      className="h-full flex flex-col bg-white border border-slate-100 p-4 rounded-2xl hover:border-primary/20 hover:shadow-sm transition-all cursor-pointer"
+      className="group h-full flex flex-col bg-white border border-slate-100 p-4 rounded-2xl hover:border-primary/20 hover:shadow-md hover:-translate-y-0.5 transition-all duration-200 cursor-pointer"
     >
+      {/* Header: avatar + nombre + NIT */}
       <div className="flex items-start gap-3">
         {g.logo_url ? (
           <img
             src={g.logo_url}
             alt={g.display_name}
-            className="w-11 h-11 rounded-lg object-cover border border-slate-100 shrink-0"
+            className="w-10 h-10 rounded-xl object-cover border border-slate-100 shrink-0"
             onError={(e) => {
               e.currentTarget.style.display = "none";
               e.currentTarget.nextElementSibling?.classList.remove("hidden");
@@ -49,74 +52,71 @@ export function ConvenioCard({ convenio: g, index: i, onOpen }: ConvenioCardProp
           />
         ) : null}
         <div
-          className={`w-11 h-11 rounded-lg flex items-center justify-center font-bold text-[15px] shrink-0 ${
+          className={`w-10 h-10 rounded-xl flex items-center justify-center font-bold text-[14px] shrink-0 ${
             g.logo_url ? "hidden" : ""
           } ${ACCENT_COLORS[i % ACCENT_COLORS.length]}`}
         >
           {g.display_name?.charAt(0).toUpperCase() ?? "?"}
         </div>
-        <div className="flex-1 min-w-0">
+        <div className="flex-1 min-w-0 pt-0.5">
           <h3
             title={g.display_name}
-            className="text-[13px] font-semibold text-navy leading-snug line-clamp-2"
+            className="text-[13.5px] font-semibold text-navy leading-snug line-clamp-2 group-hover:text-primary transition-colors"
           >
             {g.display_name}
           </h3>
-          <div className="flex items-center gap-1 text-[11px] text-slate-400 mt-1">
-            <Hash size={10} className="text-primary/50 shrink-0" />
-            <span className="truncate">NIT: {g.group_key}</span>
-          </div>
+          <p className="text-[11px] text-slate-400 mt-0.5 truncate">
+            NIT {g.group_key}
+          </p>
         </div>
       </div>
 
-      <div className="mt-3 flex items-center gap-1.5 flex-wrap">
-        {/* Primero: cuántos convenios hay */}
-        <span className="text-[10px] font-bold uppercase tracking-wide px-2 py-0.5 rounded-full bg-primary/10 text-primary flex items-center gap-1">
-          <Layers size={10} />
+      {/* Línea de estado: un solo elemento, escaneable de un vistazo */}
+      <div className="mt-3 flex items-center gap-2 text-[11.5px] flex-wrap">
+        <span className={`w-1.5 h-1.5 rounded-full shrink-0 ${status.color}`} />
+        <span className="text-slate-500 font-medium">{status.label}</span>
+        <span className="text-slate-300">·</span>
+        <span className="text-slate-400">
           {g.total_variants} convenio{g.total_variants !== 1 ? "s" : ""}
         </span>
-
-        {/* Después: estado de activos, solo si aporta info (parcial o inactivo) */}
-        {statusBadge.label !== "Activo" && (
-          <span className={`text-[10px] font-bold uppercase tracking-wide px-2 py-0.5 rounded-full ${statusBadge.className}`}>
-            {statusBadge.label}
-          </span>
-        )}
-
-        {g.type && (
-          <span
-            className={`text-[10px] font-medium px-2 py-0.5 rounded-full ${
-              esDescuento ? "bg-purple-50 text-purple-600" : "bg-blue-50 text-blue-600"
-            }`}
-          >
-            {esDescuento ? "Descuento" : "Tarifario propio"}
-          </span>
-        )}
+        <span className="text-slate-300">·</span>
+        <span className={`font-medium ${esDescuento ? "text-purple-500" : "text-blue-500"}`}>
+          {esDescuento ? "Descuento" : "Tarifario propio"}
+        </span>
       </div>
 
+      {/* Aviso — solo aparece cuando hay un problema real que resolver */}
       {(sinTarifario || pendienteDigitacion) && (
         <div
-          className={`mt-2 flex items-center gap-1.5 text-[11px] font-medium px-2 py-1 rounded-lg ${
+          className={`mt-2.5 flex items-center gap-1.5 text-[11px] font-medium px-2.5 py-1.5 rounded-lg ${
             sinTarifario ? "bg-red-50 text-red-600" : "bg-amber-50 text-amber-600"
           }`}
         >
-          {sinTarifario ? <AlertTriangle size={12} /> : <ImageOff size={12} />}
-          <span>{sinTarifario ? "Sin tarifario cargado" : "Pendiente de digitación (solo imagen)"}</span>
+          {sinTarifario ? <AlertTriangle size={12} className="shrink-0" /> : <ImageOff size={12} className="shrink-0" />}
+          <span>{sinTarifario ? "Sin tarifario cargado" : "Pendiente de digitación"}</span>
         </div>
       )}
 
+      {/* Vigencia — dato secundario, discreto */}
       {g.vigencia_fin && (
-        <div className="mt-3 flex items-center gap-1.5 text-[11px] text-slate-500">
-          <Calendar size={11} className="text-primary/40 shrink-0" />
-          <span>Vence: {new Date(g.vigencia_fin).toLocaleDateString("es-CO", { year: "numeric", month: "short", day: "numeric" })}</span>
+        <div className="mt-2.5 flex items-center gap-1.5 text-[11px] text-slate-400">
+          <Calendar size={11} className="shrink-0" />
+          <span>
+            Vence{" "}
+            {new Date(g.vigencia_fin).toLocaleDateString("es-CO", {
+              year: "numeric",
+              month: "short",
+              day: "numeric",
+            })}
+          </span>
         </div>
       )}
 
-      {/* Empuja el footer al fondo para que todas las tarjetas queden alineadas */}
-      <div className="mt-auto pt-3 border-t border-slate-50 flex items-center gap-1.5 text-[11px] text-slate-500">
+      {/* Footer: el dato más importante para decidir con qué convenio trabajar */}
+      <div className="mt-auto pt-3 border-t border-slate-50 flex items-center gap-1.5 text-[12px] text-slate-600 font-medium">
         {esDescuento ? (
           <>
-            <Percent size={12} className="text-primary/50 shrink-0" />
+            <Percent size={13} className="text-primary/60 shrink-0" />
             <span>
               {g.descuento_porcentaje != null ? `${g.descuento_porcentaje}% dto.` : "Descuento"}
               {g.descuento_aplica_sobre ? ` sobre ${g.descuento_aplica_sobre}` : ""}
@@ -124,7 +124,7 @@ export function ConvenioCard({ convenio: g, index: i, onOpen }: ConvenioCardProp
           </>
         ) : (
           <>
-            <FileBarChart size={12} className="text-primary/50 shrink-0" />
+            <FileBarChart size={13} className="text-primary/60 shrink-0" />
             <span>{(g.total_procedures ?? 0).toLocaleString()} procedimientos tarifados</span>
           </>
         )}

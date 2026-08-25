@@ -37,27 +37,28 @@ export function Pagination({ page, totalPages, onPageChange }: PaginationProps) 
       <button
         disabled={page === 1}
         onClick={() => onPageChange(page - 1)}
-        className="cursor-pointer flex items-center gap-1 px-3 py-1.5 rounded-full text-[12px] font-medium text-slate-500 border border-slate-200 hover:bg-slate-50 disabled:opacity-30 disabled:cursor-not-allowed transition-colors"
+        className="cursor-pointer flex items-center gap-1 text-[11px] font-medium px-3 py-1.5 rounded-lg border border-slate-200 text-slate-600 disabled:opacity-40 disabled:cursor-not-allowed hover:border-slate-300 hover:text-slate-800 transition-colors"
       >
-        <ChevronLeft size={14} />
+        <ChevronLeft size={13} />
         Anterior
       </button>
 
-      <div className="flex items-center gap-1">
+      <div className="flex items-center gap-1 mx-1">
         {pages.map((p, i) =>
           p === "..." ? (
-            <span key={`dots-${i}`} className="w-7 h-7 flex items-center justify-center text-[12px] text-slate-300">
-              ...
+            <span key={`dots-${i}`} className="w-8 h-8 flex items-center justify-center text-[12px] text-slate-300 select-none">
+              ···
             </span>
           ) : (
             <button
               key={p}
               onClick={() => onPageChange(p)}
-              className={`cursor-pointer w-7 h-7 flex items-center justify-center rounded-full text-[12px] font-semibold transition-colors
+              aria-current={p === page ? "page" : undefined}
+              className={`cursor-pointer w-8 h-8 flex items-center justify-center rounded-lg text-[12.5px] font-semibold border transition-colors
                 ${
                   p === page
-                    ? "bg-navy text-white"
-                    : "text-slate-500 hover:bg-slate-100"
+                    ? "bg-navy border-navy text-white shadow-sm"
+                    : "border-transparent text-slate-500 hover:border-slate-200 hover:bg-slate-50 hover:text-slate-700"
                 }`}
             >
               {p}
@@ -69,10 +70,10 @@ export function Pagination({ page, totalPages, onPageChange }: PaginationProps) 
       <button
         disabled={page >= totalPages}
         onClick={() => onPageChange(page + 1)}
-        className="cursor-pointer flex items-center gap-1 px-3 py-1.5 rounded-full text-[12px] font-medium text-slate-500 border border-slate-200 hover:bg-slate-50 disabled:opacity-30 disabled:cursor-not-allowed transition-colors"
+        className="cursor-pointer flex items-center gap-1 text-[11px] font-medium px-3 py-1.5 rounded-lg border border-slate-200 text-slate-600 disabled:opacity-40 disabled:cursor-not-allowed hover:border-slate-300 hover:text-slate-800 transition-colors"
       >
         Siguiente
-        <ChevronRight size={14} />
+        <ChevronRight size={13} />
       </button>
     </div>
   );

@@ -205,7 +205,6 @@ export function TarifarioBlock({
                   <th className="font-medium pb-2">Descripción del servicio</th>
                   <th className="font-medium pb-2">Tarifa</th>
                   <th className="font-medium pb-2 text-right">Valor</th>
-                  <th className="font-medium pb-2">Autorización</th>
                 </tr>
               </thead>
               <tbody>
@@ -238,19 +237,16 @@ export function TarifarioBlock({
                           {item.tariff_name || item.tariff_code}
                         </span>
                       </td>
-                      <td className={`py-2 text-right font-medium ${isHighlighted ? "border-y-2 border-primary/60" : ""} ${hasFixedPrice ? "text-navy" : "text-slate-500"}`}>
-                        {hasFixedPrice ? formatCOP(item.final_price) : `${item.percent}%`}
-                      </td>
                       <td
-                        className={`py-2 ${
+                        className={`py-2 text-right font-medium ${
                           isHighlighted ? "border-y-2 border-r-2 border-primary/60 rounded-r-lg" : ""
-                        }`}
+                        } ${hasFixedPrice ? "text-navy" : "text-slate-500"}`}
                       >
-                        {item.requires_auth ? (
-                          <span className="text-[10px] font-medium px-2 py-0.5 rounded-full bg-amber-50 text-amber-600">Sí</span>
-                        ) : (
-                          <span className="text-[10px] font-medium px-2 py-0.5 rounded-full bg-slate-50 text-slate-400">No</span>
-                        )}
+                        {hasFixedPrice
+                          ? formatCOP(item.final_price)
+                          : item.percent === 100 || item.percent === 0
+                            ? "N/A"
+                            : `${(item.percent - 100).toFixed(2).replace(/\.00$/, "")}%`}
                       </td>
                     </tr>
                   );

@@ -1,7 +1,7 @@
 "use client";
 
-import { useParams, useSearchParams } from "next/navigation";
-import { useState, useEffect } from "react";
+import { useParams, useSearchParams, useRouter } from "next/navigation";
+import { useState } from "react";
 import {
   MapPin,
   Phone,
@@ -12,6 +12,7 @@ import {
   Receipt,
   ShieldCheck,
   Contact,
+  ArrowLeft,
 } from "lucide-react";
 import { TarifarioBlock } from "@/components/convenios/TarifarioBlock";
 import { InformacionContrato } from "@/components/convenios/InformacionContrato";
@@ -21,10 +22,30 @@ import { RadicacionFacturas } from "@/components/convenios/RadicacionFacturas";
 import { InstruccionesAutorizacion } from "@/components/convenios/InstruccionesAutorizacion";
 import { ContactoAdministrativo } from "@/components/convenios/ContactoAdministrativo";
 import { ConvenioHeader } from "@/components/convenios/ConvenioHeader";
-import { BackButton } from "@/components/ui/BackButton";
 
 import { useConvenioDetail } from "@/hooks/useConvenioDetail";
 import { parseObservaciones } from "@/lib/parseObservaciones";
+
+// ---------------------------------------------------------------------------
+// Back button — con ícono, hover y feedback de movimiento
+// ---------------------------------------------------------------------------
+
+function BackButton() {
+  const router = useRouter();
+  return (
+    <button
+      type="button"
+      onClick={() => router.back()}
+      className="cursor-pointer group inline-flex items-center gap-1.5 rounded-lg px-2.5 py-1.5 text-[13px] font-medium text-slate-500 hover:bg-slate-100 hover:text-slate-800 transition-colors"
+    >
+      <ArrowLeft
+        size={15}
+        className="cursor-pointer transition-transform group-hover:-translate-x-0.5"
+      />
+      Volver
+    </button>
+  );
+}
 
 // ---------------------------------------------------------------------------
 // Datos rápidos — chips siempre visibles debajo del header
@@ -50,6 +71,89 @@ function QuickFact({
         <p className="text-[12.5px] font-medium text-slate-700 truncate leading-none">
           {value}
         </p>
+      </div>
+    </div>
+  );
+}
+
+// ---------------------------------------------------------------------------
+// Skeleton — imita la estructura real de la página mientras carga
+// ---------------------------------------------------------------------------
+
+function SkeletonBlock({ className = "" }: { className?: string }) {
+  return <div className={`rounded-xl bg-slate-100 ${className}`} />;
+}
+
+function ConvenioDetalleSkeleton() {
+  return (
+    <div className="max-w-[1400px] mx-auto p-4 space-y-4 font-sans animate-pulse">
+      {/* Back button (estático, no necesita skeleton) */}
+      <div className="inline-flex items-center gap-1.5 px-2.5 py-1.5 text-[13px] font-medium text-slate-300">
+        <ArrowLeft size={15} />
+        Volver
+      </div>
+
+      {/* Header card skeleton */}
+      <div className="bg-white border border-slate-100 rounded-2xl shadow-sm p-4 space-y-4">
+        <div className="flex items-center gap-3">
+          <SkeletonBlock className="h-12 w-12 rounded-full shrink-0" />
+          <div className="space-y-2 flex-1 min-w-0">
+            <SkeletonBlock className="h-4 w-1/3" />
+            <SkeletonBlock className="h-3 w-1/4" />
+          </div>
+          <SkeletonBlock className="h-6 w-20 rounded-full hidden sm:block" />
+        </div>
+
+        {/* Quick facts skeleton */}
+        <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-2">
+          {Array.from({ length: 4 }).map((_, i) => (
+            <div
+              key={i}
+              className="flex items-center gap-2 rounded-xl border border-slate-100 bg-slate-50/60 px-3 py-2"
+            >
+              <SkeletonBlock className="h-4 w-4 rounded-md shrink-0" />
+              <div className="space-y-1.5 flex-1">
+                <SkeletonBlock className="h-2 w-1/2" />
+                <SkeletonBlock className="h-2.5 w-3/4" />
+              </div>
+            </div>
+          ))}
+        </div>
+
+        {/* Información contrato skeleton */}
+        <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 pt-1">
+          {Array.from({ length: 4 }).map((_, i) => (
+            <div key={i} className="space-y-1.5">
+              <SkeletonBlock className="h-2 w-2/3" />
+              <SkeletonBlock className="h-3 w-1/2" />
+            </div>
+          ))}
+        </div>
+      </div>
+
+      {/* Tarifario skeleton */}
+      <div className="bg-white border border-slate-100 rounded-2xl shadow-sm p-4 space-y-3">
+        <div className="flex items-center justify-between">
+          <SkeletonBlock className="h-4 w-40" />
+          <SkeletonBlock className="h-7 w-28 rounded-lg" />
+        </div>
+        <SkeletonBlock className="h-28 w-full" />
+        <SkeletonBlock className="h-28 w-full" />
+      </div>
+
+      {/* Tabs panel skeleton */}
+      <div className="bg-white border border-slate-100 rounded-2xl shadow-sm overflow-hidden">
+        <div className="flex gap-5 border-b border-slate-100 px-4 py-3.5">
+          {Array.from({ length: 5 }).map((_, i) => (
+            <SkeletonBlock key={i} className="h-3.5 w-16" />
+          ))}
+        </div>
+        <div className="p-4 space-y-2.5">
+          <SkeletonBlock className="h-3 w-full" />
+          <SkeletonBlock className="h-3 w-5/6" />
+          <SkeletonBlock className="h-3 w-2/3" />
+          <SkeletonBlock className="h-3 w-3/4" />
+        </div>
       </div>
     </div>
   );
@@ -92,21 +196,8 @@ export default function ConvenioDetallePage() {
   // Pestaña activa del panel de info secundaria.
   const [activeTab, setActiveTab] = useState<TabId>("servicios");
 
-  // DEBUG TEMPORAL: revisa en la consola qué campos trae realmente
-  // `convenio`. Cuando confirmes cuál es el nombre correcto del campo
-  // con la empresa matriz, borra este useEffect.
-  useEffect(() => {
-    if (convenio) {
-      console.log("convenio completo:", convenio);
-    }
-  }, [convenio]);
-
   if (loading) {
-    return (
-      <div className="max-w-[1400px] mx-auto p-4 text-[13px] text-slate-500">
-        Cargando convenio...
-      </div>
-    );
+    return <ConvenioDetalleSkeleton />;
   }
 
   if (error || !convenio) {
