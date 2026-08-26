@@ -4,6 +4,7 @@ import { useEffect } from "react";
 import { useParams, useRouter } from "next/navigation";
 import { Hash, FileBarChart, Building2, ChevronRight, Inbox, Home } from "lucide-react";
 import { useConvenioVariants } from "@/hooks/useConvenioGroupVariants";
+import { registerConvenioVisit } from "@/hooks/useConvenios";
 import { Breadcrumb } from "@/components/convenios/Breadcrumb";
 
 // ---------------------------------------------------------------------------
@@ -121,14 +122,25 @@ export default function GrupoConvenioPage() {
           <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
             {variants.map((v) => {
               const isActive = v.status === "Activo";
+
+              // Registra la visita ANTES de navegar. Este es el punto donde
+              // se elige la variante específica dentro del grupo, así que
+              // aquí es donde debe quedar el registro (ver comentario en
+              // ConveniosPage: el caso de 1 sola variante se registra allá,
+              // el de varias variantes se registra acá).
+              const handleOpen = () => {
+                registerConvenioVisit(v.contract_key);
+                router.push(`/convenios/${v.contract_key}`);
+              };
+
               return (
                 <div
                   key={v.contract_key}
                   role="button"
                   tabIndex={0}
-                  onClick={() => router.push(`/convenios/${v.contract_key}`)}
+                  onClick={handleOpen}
                   onKeyDown={(e) => {
-                    if (e.key === "Enter" || e.key === " ") router.push(`/convenios/${v.contract_key}`);
+                    if (e.key === "Enter" || e.key === " ") handleOpen();
                   }}
                   className="group cursor-pointer rounded-2xl border border-slate-100 bg-white p-4 shadow-sm
                              transition-all duration-200 hover:-translate-y-0.5 hover:border-primary/20 hover:shadow-md

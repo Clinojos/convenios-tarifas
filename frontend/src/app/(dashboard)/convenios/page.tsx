@@ -2,11 +2,12 @@
 
 import { useState, Suspense } from "react";
 import { useSearchParams, useRouter } from "next/navigation";
-import { useConvenios } from "@/hooks/useConvenios";
+import { useConvenios, registerConvenioVisit } from "@/hooks/useConvenios";
 import { FilterBar } from "@/components/ui/FilterBar";
 import { Pagination } from "@/components/ui/Pagination";
 import { ConveniosGrid } from "@/components/convenios/ConveniosGrid";
 import type { ConvenioGroup } from "@/components/convenios/types";
+
 import Loading from "./loading";
 
 function ConveniosContent() {
@@ -43,11 +44,14 @@ function ConveniosContent() {
     router.push(`/convenios?${params.toString()}`);
   };
 
-  // Empresa con 1 sola variante -> directo a la ficha de detalle
-  // Empresa con varias variantes -> pantalla intermedia de selección
+  // Empresa con 1 sola variante -> directo a la ficha de detalle (y se
+  // registra la visita ahí mismo, porque ya tenemos un contract_key único).
+  // Empresa con varias variantes -> pantalla intermedia de selección; el
+  // registro ocurre en GrupoConvenioPage cuando elige la variante específica.
   const openConvenio = (convenio: ConvenioGroup) => {
     if (convenio.total_variants <= 1) {
       const contractKey = convenio.variant_keys?.[0] ?? convenio.group_key;
+      registerConvenioVisit(contractKey);
       router.push(`/convenios/${contractKey}`);
     } else {
       router.push(`/convenios/grupo/${convenio.group_key}`);

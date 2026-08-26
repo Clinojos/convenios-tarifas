@@ -15,7 +15,7 @@ import IconButton from "@/components/ui/IconButton";
 import { COOKIE_NAME } from "@/config/auth";
 
 const navItems = [
-  /*{ label: "Inicio", href: "/dashboard", icon: LayoutDashboard, requiredPermission: "" },*/
+  { label: "Inicio", href: "/dashboard", icon: LayoutDashboard, requiredPermission: "" },
   { label: "Convenios", href: "/convenios", icon: Building2, requiredPermission: "agreement:view" },
   /*{ label: "Procedimientos", href: "/procedures", icon: Stethoscope, requiredPermission: "procedures:view" },
   { label: "Tarifas y Servicios", href: "/tariffs", icon: FileText, requiredPermission: "tariffs:view" },*/

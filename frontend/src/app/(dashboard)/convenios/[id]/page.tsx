@@ -76,7 +76,7 @@ const TABS: {
   icon: React.ElementType;
 }[] = [
   { id: "portafolio", label: "Portafolios Procedimientos", icon: Layers },
-  { id: "informacion", label: "Información de Contrato", icon: Info },
+  { id: "informacion", label: "Información del Contrato", icon: Info },
 ];
 
 function TabSegmented({

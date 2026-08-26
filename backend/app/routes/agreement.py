@@ -10,6 +10,7 @@ from app.models.agreement_meta import AgreementMeta, Company
 from app.models.agreement_details import AgreementDetails
 from app.models.agreement_documents import AgreementDocument
 from app.models.agreement_contacts import AgreementContact
+from app.models.agreement_visit import AgreementVisit
 from app.auth.permissions import require_permission
 from app.services.search_engine import apply_search_filter
 
@@ -683,3 +684,78 @@ def update_agreement_detail(
         local_session=local_session,
         _=None,
     )
+
+# ---------------------------------------------------------------------------
+# Tracking de visitas — "Convenios más consultados" del dashboard
+# ---------------------------------------------------------------------------
+
+@router.post("/{contract_key}/visit")
+def register_agreement_visit(
+    contract_key: str,
+    session: Session = Depends(get_session_hosvital),
+    local_session: Session = Depends(get_session_local),
+    _ = Depends(require_permission("agreement:view"))
+):
+    agreement = session.exec(
+        select(Agreement).where(Agreement.MENNIT == contract_key)
+    ).first()
+
+    company_nit = _effective_company_key(agreement.MEcntr, agreement.MENNIT) if agreement else None
+
+    local_session.add(AgreementVisit(contract_key=contract_key, company_nit=company_nit))
+    local_session.commit()
+
+    return {"ok": True}
+
+
+@router.get("/top-consultadas")
+def get_top_consulted_companies(
+    session: Session = Depends(get_session_hosvital),
+    local_session: Session = Depends(get_session_local),
+    limit: int = 5,
+    _ = Depends(require_permission("agreement:view"))
+):
+    # Ahora agrupamos por CONVENIO (contract_key), no por empresa,
+    # para que "BANCO" y "BANCO1" (ambos de Bancolombia) salgan
+    # como tarjetas separadas en vez de una sola.
+    rows = local_session.exec(
+        select(AgreementVisit.contract_key, func.count().label("visits"))
+        .group_by(AgreementVisit.contract_key)
+        .order_by(func.count().desc())
+        .limit(limit)
+    ).all()
+
+    ordered_keys = [r[0] for r in rows]
+    visits_map = {r[0]: r[1] for r in rows}
+    if not ordered_keys:
+        return {"data": []}
+
+    agreements = session.exec(
+        select(Agreement).where(Agreement.MENNIT.in_(ordered_keys))
+    ).all()
+    agreements_map = {str(a.MENNIT).strip(): a for a in agreements}
+
+    # Nombre de la empresa matriz (para mostrarlo como subtítulo/contexto,
+    # ej. "Bancolombia S.A." debajo del nombre del convenio "BANCO").
+    company_keys = list({
+        _effective_company_key(a.MEcntr, a.MENNIT) for a in agreements
+    })
+    terceros_map = _get_terceros_names(session, company_keys)
+
+    output = []
+    for key in ordered_keys:
+        agreement = agreements_map.get(key)
+        if not agreement:
+            # convenio visitado que ya no existe en Hosvital
+            continue
+        company_key = _effective_company_key(agreement.MEcntr, agreement.MENNIT)
+        output.append({
+            "group_key": key,  # ahora es el contract_key del convenio
+            "display_name": str(agreement.MENOMB).strip() if agreement.MENOMB else key,
+            "company_name": terceros_map.get(company_key),
+            "is_active": str(agreement.MEestado).strip() == '0',
+            "visits": visits_map.get(key, 0),
+            "type": None,
+        })
+
+    return {"data": output}

@@ -12,7 +12,7 @@ export async function middleware(request: NextRequest) {
 
   // 1. Si ya está autenticado, no dejar entrar al login (sin importar el rol)
   if (auth && pathname === "/login") {
-    return NextResponse.redirect(new URL("/welcome", request.url));
+    return NextResponse.redirect(new URL("/dashboard", request.url));
   }
 
   // 2. Si no está autenticado y no está en login, redirigir al login

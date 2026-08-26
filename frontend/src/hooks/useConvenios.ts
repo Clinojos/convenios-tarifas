@@ -68,3 +68,19 @@ export const useConvenios = ({
     totalPages: Math.ceil(total / limit),
   };
 };
+
+// Fire-and-forget: no bloquea la navegación ni se maneja loading/error en
+// la UI — si falla, se pierde ese conteo, pero el usuario nunca se entera.
+// Se exporta suelta (no como parte del hook) porque se llama desde donde
+// sea que exista un "abrir convenio" (openConvenio en la página de
+// listado, y potencialmente el buscador global también).
+export const registerConvenioVisit = (contractKey: string) => {
+  const token = getToken();
+  fetch(`${API_BASE_URL}/agreements/${contractKey}/visit`, {
+    method: "POST",
+    headers: {
+      Authorization: `Bearer ${token}`,
+      "Content-Type": "application/json",
+    },
+  }).catch((err) => console.error("No se pudo registrar la visita:", err));
+};

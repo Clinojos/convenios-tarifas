@@ -52,7 +52,7 @@ export function useAuth() {
       // Un usuario puede loguearse sin rol asignado; simplemente no
       // tendrá permisos hasta que un admin le asigne uno.
       document.cookie = `${COOKIE_NAME}=${data.access_token}; path=/; max-age=86400; SameSite=Lax`;
-      window.location.href = "/welcome";
+      window.location.href = "/dashboard";
     } catch (err: any) {
       setError(err instanceof Error ? err.message : "Error desconocido");
       setLoading(false); // Importante: deshabilitar loading si hay error

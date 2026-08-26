@@ -124,13 +124,9 @@ export function TarifarioBlock({
     <div className="bg-white border border-slate-100 rounded-2xl shadow-sm p-4">
       {portfolios.length > 0 && (
         <div className="-mx-4 px-4">
-          <div className="flex items-center gap-1.5 mb-2">
-            <Layers size={13} className="text-slate-300 shrink-0" />
-            <span className="text-[11px] font-semibold text-slate-500 uppercase tracking-wide">
-              Portafolios
-            </span>
-          </div>
+           
           <div className="flex items-center gap-1.5 overflow-x-auto">
+            <Layers size={13} className="text-slate-300 shrink-0" />
             {portfolios.length > 1 ? (
               portfolios.map((p) => (
                 <button

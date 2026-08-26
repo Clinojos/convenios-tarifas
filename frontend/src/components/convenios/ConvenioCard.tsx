@@ -1,13 +1,20 @@
 "use client";
 
 import { FileBarChart, AlertTriangle, ImageOff, Percent, Calendar } from "lucide-react";
-import { ACCENT_COLORS } from "./constants";
 import type { ConvenioGroup } from "./types";
 
 interface ConvenioCardProps {
   convenio: ConvenioGroup;
   index: number;
   onOpen: (convenio: ConvenioGroup) => void;
+}
+
+// Misma paleta/hash que usa el dashboard (avatarColor en page.tsx) para que
+// el color de cada convenio sea consistente entre el inicio y la lista.
+const AVATAR_PALETTE = ["bg-primary", "bg-emerald-500", "bg-amber-500", "bg-rose-500", "bg-purple-500"];
+function avatarColor(nombre: string) {
+  const hash = [...nombre].reduce((acc, ch) => acc + ch.charCodeAt(0), 0);
+  return AVATAR_PALETTE[hash % AVATAR_PALETTE.length];
 }
 
 // Un solo indicador de estado en vez de dos pastillas separadas
@@ -38,23 +45,12 @@ export function ConvenioCard({ convenio: g, index: i, onOpen }: ConvenioCardProp
       }}
       className="group h-full flex flex-col bg-white border border-slate-100 p-4 rounded-2xl hover:border-primary/20 hover:shadow-md hover:-translate-y-0.5 transition-all duration-200 cursor-pointer"
     >
-      {/* Header: avatar + nombre + NIT */}
+      {/* Header: avatar de iniciales + nombre + NIT (sin imágenes/logos) */}
       <div className="flex items-start gap-3">
-        {g.logo_url ? (
-          <img
-            src={g.logo_url}
-            alt={g.display_name}
-            className="w-10 h-10 rounded-xl object-cover border border-slate-100 shrink-0"
-            onError={(e) => {
-              e.currentTarget.style.display = "none";
-              e.currentTarget.nextElementSibling?.classList.remove("hidden");
-            }}
-          />
-        ) : null}
         <div
-          className={`w-10 h-10 rounded-xl flex items-center justify-center font-bold text-[14px] shrink-0 ${
-            g.logo_url ? "hidden" : ""
-          } ${ACCENT_COLORS[i % ACCENT_COLORS.length]}`}
+          className={`w-10 h-10 rounded-xl flex items-center justify-center font-bold text-[14px] text-white shrink-0 ${avatarColor(
+            g.display_name ?? ""
+          )}`}
         >
           {g.display_name?.charAt(0).toUpperCase() ?? "?"}
         </div>
