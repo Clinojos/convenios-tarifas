@@ -22,6 +22,8 @@ class SearchResult(BaseModel):
     type: str
     details: str
     route: str
+    convenio_name: Optional[str] = None
+    is_active: Optional[bool] = None
 
 
 class SearchResponse(BaseModel):
@@ -82,6 +84,7 @@ def _search_agreements(session: Session, q: str, limit: int, offset: int) -> tup
             "type": "Convenio",
             "details": f"Estado: {'Activo' if is_active else 'Inactivo'}",
             "route": f"/convenios/{str(a.MENNIT).strip()}",
+            "is_active": is_active,
         })
     return out, has_more
 
@@ -137,7 +140,18 @@ def _search_procedures(session: Session, q: str, limit: int, offset: int) -> tup
         final_price = round(base * item.PTPorc / 100, 2)
         contract_key = str(agreement.MENNIT).strip()
         company_key = effective_company_key(agreement.MEcntr, agreement.MENNIT)
-        company_name = terceros_map.get(company_key) or str(agreement.MENOMB).strip()
+        # Nombre del convenio propiamente dicho (MENOMB), independiente de
+        # si TERCEROS tiene o no el nombre "oficial" de la empresa. Antes
+        # este valor solo se usaba como fallback de company_name cuando
+        # TERCEROS no tenía coincidencia, y nunca se exponía como campo
+        # propio -> por eso el frontend nunca podía mostrar el convenio
+        # junto con empresa/portafolio en los resultados de Procedimiento.
+        convenio_name = str(agreement.MENOMB).strip() if agreement.MENOMB else ""
+        company_name = terceros_map.get(company_key) or convenio_name
+        # MEestado: '0' = Activo, '1' = Inactivo (mismo criterio que en
+        # _search_agreements y en agreements.py). El procedimiento en sí no
+        # tiene estado propio -> hereda el del convenio al que pertenece.
+        is_active = str(agreement.MEestado).strip() == "0"
 
         out.append({
             "id": f"proc-{proc.PRCODI.strip()}-{contract_key}-{portfolio.PTCodi}",
@@ -148,6 +162,8 @@ def _search_procedures(session: Session, q: str, limit: int, offset: int) -> tup
                 f"/convenios/{contract_key}"
                 f"?highlight={proc.PRCODI.strip()}&portfolio={portfolio.PTCodi}"
             ),
+            "convenio_name": convenio_name or None,
+            "is_active": is_active,
         })
     return out, has_more
 

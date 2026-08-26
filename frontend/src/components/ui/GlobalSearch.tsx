@@ -1,6 +1,7 @@
 "use client";
 
-import { useRef, useMemo, useEffect, useState } from "react";
+import { useRef, useMemo, useEffect, useState, ReactNode } from "react";
+import { createPortal } from "react-dom";
 import { Search, Stethoscope, Building2, X, Hash, Layers, Briefcase, Loader2, FileText, ArrowRight } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { useSearch } from "@/hooks/useSearch";
@@ -27,6 +28,12 @@ type GlobalSearchProps = {
 //
 // Convenios:      "Código: 088001 · Portafolio: CAJA DE COMPENSACION COMPENSAR · Empresa: COMPENSAR EPS · $0"
 // Procedimientos: "BANCOLOMBIA S.A. · BANCOLOMBIA - $627,200.00"  (sin etiquetas, empresa · portafolio - precio)
+//
+// Además, para Procedimientos el backend manda el nombre del convenio en un
+// campo propio (`convenio_name`, snake_case, ver /api/v1/search), separado
+// del string de `details`. Antes solo se leía `item.convenioName`/`item.name`
+// (camelCase) y nunca `item.convenio_name`, por eso el badge de convenio
+// nunca aparecía en resultados de tipo Procedimiento.
 //
 // Lo separamos para poder mostrar cada dato con su propio color/ícono en
 // vez de texto plano corrido, así el usuario distingue cada campo de un
@@ -55,7 +62,129 @@ function extractCodeFromTitle(title: string): { code?: string; title: string } {
   return { code: match[1], title: match[2] };
 }
 
+// Tooltip flotante genérico, mismo patrón que el de IconButton (Sidebar):
+// se posiciona con getBoundingClientRect + createPortal a document.body
+// para no quedar recortado por overflow-hidden de contenedores padres, y
+// usa el mismo estilo visual (fondo blanco, borde celeste, texto #6B9BAE).
+// A diferencia de un `title` nativo, este SÍ se ve consistente en toda la
+// app y aparece con una pequeña demora al dejar el cursor quieto.
+type TooltipPosition = "top" | "bottom" | "left" | "right";
+
+const TOOLTIP_SHOW_DELAY = 250;
+
+function HoverLabel({
+  label,
+  children,
+  position = "top",
+}: {
+  label: string;
+  children: ReactNode;
+  position?: TooltipPosition;
+}) {
+  const [hovered, setHovered] = useState(false);
+  const [coords, setCoords] = useState({ top: 0, left: 0 });
+  const wrapperRef = useRef<HTMLSpanElement>(null);
+  const timeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  const updatePosition = () => {
+    const rect = wrapperRef.current?.getBoundingClientRect();
+    if (!rect) return;
+
+    const gap = 6;
+    let top = 0;
+    let left = 0;
+
+    switch (position) {
+      case "top":
+        top = rect.top - gap;
+        left = rect.left + rect.width / 2;
+        break;
+      case "bottom":
+        top = rect.bottom + gap;
+        left = rect.left + rect.width / 2;
+        break;
+      case "left":
+        top = rect.top + rect.height / 2;
+        left = rect.left - gap;
+        break;
+      case "right":
+        top = rect.top + rect.height / 2;
+        left = rect.right + gap;
+        break;
+    }
+
+    setCoords({ top, left });
+  };
+
+  const handleEnter = () => {
+    timeoutRef.current = setTimeout(() => {
+      updatePosition();
+      setHovered(true);
+    }, TOOLTIP_SHOW_DELAY);
+  };
+
+  const handleLeave = () => {
+    if (timeoutRef.current) clearTimeout(timeoutRef.current);
+    setHovered(false);
+  };
+
+  useEffect(() => {
+    return () => {
+      if (timeoutRef.current) clearTimeout(timeoutRef.current);
+    };
+  }, []);
+
+  const transformMap: Record<TooltipPosition, string> = {
+    top: "translate(-50%, -100%)",
+    bottom: "translate(-50%, 0)",
+    left: "translate(-100%, -50%)",
+    right: "translate(0, -50%)",
+  };
+
+  const arrowClassMap: Record<TooltipPosition, string> = {
+    top: "absolute top-full left-1/2 -ml-1 -mt-1 h-2 w-2 rotate-45 bg-white border-r border-b border-[#D9EEF8]",
+    bottom: "absolute bottom-full left-1/2 -ml-1 -mb-1 h-2 w-2 rotate-45 bg-white border-l border-t border-[#D9EEF8]",
+    left: "absolute left-full top-1/2 -mt-1 -ml-1 h-2 w-2 rotate-45 bg-white border-r border-t border-[#D9EEF8]",
+    right: "absolute right-full top-1/2 -mt-1 -mr-1 h-2 w-2 rotate-45 bg-white border-l border-b border-[#D9EEF8]",
+  };
+
+  return (
+    <span
+      ref={wrapperRef}
+      onMouseEnter={handleEnter}
+      onMouseLeave={handleLeave}
+      className="inline-flex min-w-0"
+    >
+      {children}
+
+      {hovered &&
+        typeof document !== "undefined" &&
+        createPortal(
+          <span
+            style={{
+              position: "fixed",
+              top: coords.top,
+              left: coords.left,
+              transform: transformMap[position],
+              zIndex: 9999,
+            }}
+            className="rounded-md bg-white border border-[#D9EEF8] px-2 py-1 text-[10px] font-medium text-[#6B9BAE] shadow-sm whitespace-nowrap pointer-events-none"
+          >
+            {label}
+            <span className={arrowClassMap[position]} />
+          </span>,
+          document.body
+        )}
+    </span>
+  );
+}
+
 function parseMeta(item: any) {
+  // Nombre del convenio: el backend lo manda como `convenio_name`
+  // (snake_case) en /api/v1/search. Se mantienen los fallbacks viejos
+  // (`convenioName`, `name`) por si otro origen de datos todavía los usa.
+  const backendConvenioName = item.convenio_name ?? item.convenioName ?? item.name;
+
   // Si el backend manda campos propios ya separados, se usan directo.
   if (item.code || item.portfolio || item.company || item.price) {
     return {
@@ -63,14 +192,17 @@ function parseMeta(item: any) {
       portfolio: item.portfolio,
       company: item.company,
       price: item.price,
-      // NOTA: asumo que el backend puede mandar el nombre del convenio en
-      // `convenioName` (o, si no, `name`). Si el campo real se llama distinto,
-      // avísame y cambio esta línea.
-      convenioName: item.convenioName ?? item.name,
+      convenioName: backendConvenioName,
     };
   }
   if (!item.details) {
-    return { code: undefined, portfolio: undefined, company: undefined, price: undefined, convenioName: undefined };
+    return {
+      code: undefined,
+      portfolio: undefined,
+      company: undefined,
+      price: undefined,
+      convenioName: backendConvenioName,
+    };
   }
 
   const raw = String(item.details);
@@ -107,13 +239,15 @@ function parseMeta(item: any) {
       // Por si el backend llega a mandar una etiqueta "Convenio: ..." explícita.
       else if (label.includes("convenio")) convenioName = value;
     }
-    return { code, portfolio, company, price, convenioName: convenioName ?? item.convenioName ?? item.name };
+    return { code, portfolio, company, price, convenioName: convenioName ?? backendConvenioName };
   }
 
   // Formato sin etiquetas (procedimientos): "EMPRESA · PORTAFOLIO"
   // primer segmento = empresa que paga, segundo = portafolio/convenio.
+  // El nombre del convenio en sí NO viene en este string -> se toma del
+  // campo propio `item.convenio_name` que manda el backend aparte.
   const [company, portfolio] = parts;
-  return { code: undefined, portfolio, company, price, convenioName: undefined };
+  return { code: undefined, portfolio, company, price, convenioName: backendConvenioName };
 }
 
 // Compara texto ignorando tildes y mayúsculas, para que "compensar" matchee
@@ -351,59 +485,62 @@ export function GlobalSearch({
                 también hay precio arriba. */}
             <div className="mt-1.5 flex flex-wrap items-center gap-1.5">
               {code && (
-                <span
-                  className="flex items-center gap-1 shrink-0 text-[10px] font-mono font-semibold text-slate-600 bg-slate-100 rounded-full px-2 py-0.5"
-                  title="Código"
-                >
-                  <Hash size={10} />
-                  {code}
-                </span>
+                <HoverLabel label="Código">
+                  <span className="flex items-center gap-1 shrink-0 text-[10px] font-mono font-semibold text-slate-600 bg-slate-100 rounded-full px-2 py-0.5">
+                    <Hash size={10} />
+                    {code}
+                  </span>
+                </HoverLabel>
               )}
               {company && (
-                <span
-                  className="flex items-center gap-1 min-w-0 max-w-[180px] text-[10px] font-medium text-purple-600 bg-purple-50 rounded-full px-2 py-0.5"
-                  title={`Empresa: ${company}`}
-                >
-                  <Briefcase size={10} className="shrink-0" />
-                  <span className="truncate">{company}</span>
-                </span>
+                <HoverLabel label={`Empresa: ${company}`}>
+                  <span className="flex items-center gap-1 min-w-0 max-w-[180px] text-[10px] font-medium text-purple-600 bg-purple-50 rounded-full px-2 py-0.5">
+                    <Briefcase size={10} className="shrink-0" />
+                    <span className="truncate">{company}</span>
+                  </span>
+                </HoverLabel>
               )}
-              {/* Nombre del convenio: va antes que el portafolio.
-                  OJO: revisar que `convenioName` mapee al campo real que
-                  manda el backend (ver nota en parseMeta). */}
+              {/* Nombre del convenio: va antes que el portafolio. Ya viene
+                  del campo propio `item.convenio_name` que manda el backend
+                  para resultados de tipo Procedimiento. */}
               {convenioName && (
-                <span
-                  className="flex items-center gap-1 min-w-0 max-w-[180px] text-[10px] font-medium text-indigo-600 bg-indigo-50 rounded-full px-2 py-0.5"
-                  title={`Convenio: ${convenioName}`}
-                >
-                  <FileText size={10} className="shrink-0" />
-                  <span className="truncate">{convenioName}</span>
-                </span>
+                <HoverLabel label={`Convenio: ${convenioName}`}>
+                  <span className="flex items-center gap-1 min-w-0 max-w-[180px] text-[10px] font-medium text-indigo-600 bg-indigo-50 rounded-full px-2 py-0.5">
+                    <FileText size={10} className="shrink-0" />
+                    <span className="truncate">{convenioName}</span>
+                  </span>
+                </HoverLabel>
               )}
               {portfolio && (
-                <span
-                  className="flex items-center gap-1 min-w-0 max-w-[180px] text-[10px] font-medium text-blue-600 bg-blue-50 rounded-full px-2 py-0.5"
-                  title={`Portafolio: ${portfolio}`}
-                >
-                  <Layers size={10} className="shrink-0" />
-                  <span className="truncate">{portfolio}</span>
-                </span>
+                <HoverLabel label={`Portafolio: ${portfolio}`}>
+                  <span className="flex items-center gap-1 min-w-0 max-w-[180px] text-[10px] font-medium text-blue-600 bg-blue-50 rounded-full px-2 py-0.5">
+                    <Layers size={10} className="shrink-0" />
+                    <span className="truncate">{portfolio}</span>
+                  </span>
+                </HoverLabel>
               )}
 
               {/* Fallback: si no se pudo reconocer ningún campo, se muestra
                   el texto crudo tal cual venga. */}
               {!code && !portfolio && !company && !convenioName && item.details && (
-                <span className="truncate text-[11px] text-slate-500" title={item.details}>
-                  {item.details}
-                </span>
+                <HoverLabel label={item.details}>
+                  <span className="truncate text-[11px] text-slate-500">{item.details}</span>
+                </HoverLabel>
               )}
             </div>
           </div>
 
-          <span
-            className={`shrink-0 mt-0.5 w-2 h-2 rounded-full ${isConvenio ? "bg-primary" : "bg-green"}`}
-            title={item.type}
-          />
+          {/* Punto de estado: verde si activo, rojo si inactivo. El texto
+              "Activo"/"Inactivo" ya no va como title nativo, sino como
+              tooltip flotante (ver <HoverLabel>) para que se vea con el
+              mismo estilo que el resto de la app. */}
+          <HoverLabel label={item.is_active === false ? "Inactivo" : "Activo"} position="top">
+            <span
+              className={`shrink-0 mt-0.5 w-2 h-2 rounded-full ${
+                item.is_active === false ? "bg-rose-500" : "bg-emerald-500"
+              }`}
+            />
+          </HoverLabel>
         </div>
 
         {/* Panel expandible: usamos el truco de grid-template-rows 0fr -> 1fr
