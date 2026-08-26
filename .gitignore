@@ -21,3 +21,7 @@ venv/
 *.msi
 *.exe
 .DS_Store
+
+# Base de datos (se maneja manual, no por git)
+backend/Database/*.db
+backend/Database/*.db-journal
