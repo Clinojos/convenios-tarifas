@@ -20,9 +20,18 @@
  * NUEVO (ago 2026, parte 7):
  * - Se reincorporó contractKey: código de contrato debajo del nombre
  *   (se había perdido en un refactor anterior).
+ *
+ * NUEVO (ago 2026, parte 8):
+ * - El avatar de respaldo (sin logoUrl) ahora usa el mismo helper
+ *   avatarColor(nombre) y la misma forma circular que la página de grupo
+ *   (/convenios/grupo/[groupKey]), en vez del color plano que traía el
+ *   backend en avatar_color. Así el color de cada empresa es consistente
+ *   en toda la app. El prop avatarColor (del backend) queda sin usar aquí;
+ *   se puede eliminar de la interfaz cuando ya no se necesite en el padre.
  */
 
 import { Building2, Hash } from "lucide-react";
+import { avatarColor as getAvatarColor } from "@/components/convenios/avatarColor";
 
 const DASH = "—";
 
@@ -48,13 +57,15 @@ export function ConvenioHeader({
   contractKey,
   companyName,
   logoUrl,
-  avatarColor,
   status,
   isActive,
   portfolioCount,
   isEps,
 }: ConvenioHeaderProps) {
   const logoInicial = name?.charAt(0).toUpperCase() ?? "?";
+  // Mismo criterio que la tarjeta en /convenios/grupo/[groupKey]:
+  // empresa matriz si existe, si no el nombre del convenio.
+  const avatarBg = getAvatarColor(companyName ?? name ?? "");
 
   return (
     <div className="flex items-start justify-between gap-4 flex-wrap">
@@ -63,7 +74,7 @@ export function ConvenioHeader({
           <img
             src={logoUrl}
             alt={name ?? ""}
-            className="w-12 h-12 rounded-xl object-cover border border-slate-100 shrink-0"
+            className="w-12 h-12 rounded-full object-cover border border-slate-100 shrink-0"
             onError={(e) => {
               e.currentTarget.style.display = "none";
               e.currentTarget.nextElementSibling?.classList.remove("hidden");
@@ -71,10 +82,9 @@ export function ConvenioHeader({
           />
         ) : null}
         <div
-          className={`w-12 h-12 rounded-xl flex items-center justify-center font-bold text-[16px] shrink-0 ${
+          className={`w-12 h-12 rounded-full flex items-center justify-center font-bold text-[16px] text-white shrink-0 ${avatarBg} ${
             logoUrl ? "hidden" : ""
           }`}
-          style={{ backgroundColor: `${avatarColor}20`, color: avatarColor ?? undefined }}
         >
           {logoInicial}
         </div>

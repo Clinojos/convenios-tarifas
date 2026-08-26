@@ -2,10 +2,11 @@
 
 import { useEffect } from "react";
 import { useParams, useRouter } from "next/navigation";
-import { Hash, FileBarChart, Building2, ChevronRight, Inbox, Home } from "lucide-react";
+import { Hash, FileBarChart, ChevronRight, Inbox, Home } from "lucide-react";
 import { useConvenioVariants } from "@/hooks/useConvenioGroupVariants";
 import { registerConvenioVisit } from "@/hooks/useConvenios";
 import { Breadcrumb } from "@/components/convenios/Breadcrumb";
+import { avatarColor } from "@/components/convenios/avatarColor";
 
 // ---------------------------------------------------------------------------
 // Skeleton — mismo shell que el de convenio detalle (h-dvh + overflow-hidden)
@@ -82,12 +83,12 @@ export default function GrupoConvenioPage() {
       */}
       <div className="flex shrink-0 flex-col gap-3 rounded-2xl border border-slate-100 bg-white p-3 shadow-sm sm:flex-row sm:items-center sm:justify-between sm:p-4">
         <div className="flex min-w-0 flex-1 items-center gap-3">
-          <div className="h-12 w-12 shrink-0 overflow-hidden rounded-full bg-gradient-to-br from-primary/10 to-primary/5 flex items-center justify-center">
-            {companyLogo ? (
-              <img src={companyLogo} alt={companyName ?? ""} className="h-full w-full object-contain p-1.5" />
-            ) : (
-              <Building2 size={20} className="text-primary" />
-            )}
+          <div
+            className={`h-12 w-12 shrink-0 rounded-full flex items-center justify-center font-bold text-[17px] text-white ${avatarColor(
+              companyName ?? variants[0]?.name ?? ""
+            )}`}
+          >
+            {(companyName ?? variants[0]?.name ?? "?").charAt(0).toUpperCase()}
           </div>
           <div className="min-w-0">
             <h1 className="truncate text-[17px] font-bold text-slate-800 tracking-tight">
@@ -148,12 +149,12 @@ export default function GrupoConvenioPage() {
                 >
                   <div className="flex items-start justify-between gap-2">
                     <div className="flex min-w-0 items-center gap-2.5">
-                      <div className="flex h-8 w-8 shrink-0 items-center justify-center overflow-hidden rounded-lg bg-slate-50">
-                        {v.logo_url ? (
-                          <img src={v.logo_url} alt={v.name} className="h-full w-full object-contain p-1" />
-                        ) : (
-                          <Building2 size={14} className="text-slate-400" />
-                        )}
+                      <div
+                        className={`flex h-8 w-8 shrink-0 items-center justify-center rounded-lg font-bold text-[12px] text-white ${avatarColor(
+                          v.name ?? ""
+                        )}`}
+                      >
+                        {v.name?.charAt(0).toUpperCase() ?? "?"}
                       </div>
                       <h3 className="truncate text-[13px] font-semibold text-slate-800">{v.name}</h3>
                     </div>

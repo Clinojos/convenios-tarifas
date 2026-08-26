@@ -2,19 +2,12 @@
 
 import { FileBarChart, AlertTriangle, ImageOff, Percent, Calendar } from "lucide-react";
 import type { ConvenioGroup } from "./types";
+import { avatarColor } from "./avatarColor";
 
 interface ConvenioCardProps {
   convenio: ConvenioGroup;
   index: number;
   onOpen: (convenio: ConvenioGroup) => void;
-}
-
-// Misma paleta/hash que usa el dashboard (avatarColor en page.tsx) para que
-// el color de cada convenio sea consistente entre el inicio y la lista.
-const AVATAR_PALETTE = ["bg-primary", "bg-emerald-500", "bg-amber-500", "bg-rose-500", "bg-purple-500"];
-function avatarColor(nombre: string) {
-  const hash = [...nombre].reduce((acc, ch) => acc + ch.charCodeAt(0), 0);
-  return AVATAR_PALETTE[hash % AVATAR_PALETTE.length];
 }
 
 // Un solo indicador de estado en vez de dos pastillas separadas

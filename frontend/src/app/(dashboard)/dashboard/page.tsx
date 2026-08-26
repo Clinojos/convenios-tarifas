@@ -110,7 +110,7 @@ export default function DashboardPage() {
               <a
                 key={c.group_key}
                 href={`/convenios/${encodeURIComponent(c.group_key)}`}
-                className="flex flex-col gap-2 p-4 rounded-xl border border-slate-100 hover:border-primary/40 hover:shadow-sm transition-all"
+                className="relative flex flex-col gap-2 p-4 rounded-xl border border-slate-100 hover:border-primary/40 hover:shadow-md hover:scale-105 hover:z-10 transition-all duration-200"
               >
                 <div
                   className={`w-8 h-8 rounded-lg ${avatarColor(c.display_name)} text-white flex items-center justify-center text-xs font-bold`}

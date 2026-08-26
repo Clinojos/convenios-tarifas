@@ -1,7 +1,7 @@
 "use client";
 
-import { useRef, useMemo, useEffect } from "react";
-import { Search, Stethoscope, Building2, X, Hash, Layers, Briefcase, Loader2 } from "lucide-react";
+import { useRef, useMemo, useEffect, useState } from "react";
+import { Search, Stethoscope, Building2, X, Hash, Layers, Briefcase, Loader2, FileText, ArrowRight } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { useSearch } from "@/hooks/useSearch";
 import { usePermissions } from "@/hooks/usePermissions";
@@ -23,42 +23,143 @@ type GlobalSearchProps = {
   className?: string;
 };
 
-// El backend manda todo en un solo string:
-// "Código: 088001 · Portafolio: CAJA DE COMPENSACION COMPENSAR · Empresa: COMPENSAR EPS · $0"
-// Lo separamos por "·" y luego por ":" para poder mostrar cada dato con su propio icono
-// en vez de texto plano corrido.
+// El backend manda la info en formatos distintos según el resultado:
+//
+// Convenios:      "Código: 088001 · Portafolio: CAJA DE COMPENSACION COMPENSAR · Empresa: COMPENSAR EPS · $0"
+// Procedimientos: "BANCOLOMBIA S.A. · BANCOLOMBIA - $627,200.00"  (sin etiquetas, empresa · portafolio - precio)
+//
+// Lo separamos para poder mostrar cada dato con su propio color/ícono en
+// vez de texto plano corrido, así el usuario distingue cada campo de un
+// vistazo sin tener que leer nada.
 const stripAccents = (s: string) => s.normalize("NFD").replace(/[\u0300-\u036f]/g, "");
 
-function parseMeta(item: any) {
-  // Si en algún momento el backend empieza a mandar campos propios, se usan directo
-  if (item.code || item.portfolio || item.company) {
-    return { code: item.code, portfolio: item.portfolio, company: item.company };
-  }
-  if (!item.details) return { code: undefined, portfolio: undefined, company: undefined };
+// Formatea precios a pesos colombianos sin decimales.
+// OJO: si el string trae decimales tipo "627,200.00" (punto como separador
+// decimal, coma de miles), hay que recortarlos ANTES de limpiar el resto de
+// caracteres. Si no, "$627,200.00" -> se borra el punto -> "62720000" ->
+// se muestra "$62.720.000" (¡el valor queda multiplicado por 100!).
+function formatPrice(raw: string): string {
+  const cleaned = raw.replace(/[^\d.,]/g, "");
+  const decimalMatch = cleaned.match(/\.(\d{2})$/); // termina en ".NN" -> son centavos
+  const withoutDecimals = decimalMatch ? cleaned.slice(0, -3) : cleaned;
+  const numeric = Number(withoutDecimals.replace(/[.,]/g, ""));
+  if (Number.isNaN(numeric)) return raw;
+  return numeric.toLocaleString("es-CO", { style: "currency", currency: "COP", maximumFractionDigits: 0 });
+}
 
-  const parts = String(item.details)
+// Extrae el código CUPS cuando viene pegado al inicio del título
+// ("088402 SUTURA PROFUNDA DE HERIDA..." -> code: "088402").
+function extractCodeFromTitle(title: string): { code?: string; title: string } {
+  const match = title.match(/^(\d{4,6})\s+(.+)$/);
+  if (!match) return { title };
+  return { code: match[1], title: match[2] };
+}
+
+function parseMeta(item: any) {
+  // Si el backend manda campos propios ya separados, se usan directo.
+  if (item.code || item.portfolio || item.company || item.price) {
+    return {
+      code: item.code,
+      portfolio: item.portfolio,
+      company: item.company,
+      price: item.price,
+      // NOTA: asumo que el backend puede mandar el nombre del convenio en
+      // `convenioName` (o, si no, `name`). Si el campo real se llama distinto,
+      // avísame y cambio esta línea.
+      convenioName: item.convenioName ?? item.name,
+    };
+  }
+  if (!item.details) {
+    return { code: undefined, portfolio: undefined, company: undefined, price: undefined, convenioName: undefined };
+  }
+
+  const raw = String(item.details);
+
+  // Saca el precio primero, sin importar si viene como "$0" suelto o como
+  // "... - $627,200.00" al final, para no confundirlo con el resto de partes.
+  const priceMatch = raw.match(/\$[\d.,]+/);
+  const price = priceMatch?.[0];
+  const withoutPrice = raw.replace(/\s*-?\s*\$[\d.,]+\s*$/, "").trim();
+
+  const parts = withoutPrice
     .split(/[·•]/)
-    .map((p: string) => p.trim())
+    .map((p) => p.trim())
     .filter(Boolean);
 
-  let code: string | undefined;
-  let portfolio: string | undefined;
-  let company: string | undefined;
+  // Formato con etiquetas (convenios): "Código: X · Portafolio: Y · Empresa: Z"
+  const hasLabels = parts.some((p) => p.includes(":"));
+  if (hasLabels) {
+    let code: string | undefined;
+    let portfolio: string | undefined;
+    let company: string | undefined;
+    let convenioName: string | undefined;
 
-  for (const part of parts) {
-    const colonIndex = part.indexOf(":");
-    if (colonIndex === -1) continue; // ej: "$0", sin etiqueta, se ignora
+    for (const part of parts) {
+      const colonIndex = part.indexOf(":");
+      if (colonIndex === -1) continue;
+      const label = stripAccents(part.slice(0, colonIndex).trim().toLowerCase());
+      const value = part.slice(colonIndex + 1).trim();
+      if (!value) continue;
 
-    const label = stripAccents(part.slice(0, colonIndex).trim().toLowerCase());
-    const value = part.slice(colonIndex + 1).trim();
-    if (!value) continue;
-
-    if (label.includes("codigo")) code = value;
-    else if (label.includes("portafolio")) portfolio = value;
-    else if (label.includes("empresa")) company = value;
+      if (label.includes("codigo")) code = value;
+      else if (label.includes("portafolio")) portfolio = value;
+      else if (label.includes("empresa")) company = value;
+      // Por si el backend llega a mandar una etiqueta "Convenio: ..." explícita.
+      else if (label.includes("convenio")) convenioName = value;
+    }
+    return { code, portfolio, company, price, convenioName: convenioName ?? item.convenioName ?? item.name };
   }
 
-  return { code, portfolio, company };
+  // Formato sin etiquetas (procedimientos): "EMPRESA · PORTAFOLIO"
+  // primer segmento = empresa que paga, segundo = portafolio/convenio.
+  const [company, portfolio] = parts;
+  return { code: undefined, portfolio, company, price, convenioName: undefined };
+}
+
+// Compara texto ignorando tildes y mayúsculas, para que "compensar" matchee
+// "COMPENSAR" o "Compénsar".
+const normalize = (s: string) => stripAccents(String(s ?? "")).toLowerCase();
+
+// Reordena los resultados de un grupo (convenios o procedimientos) para que
+// los que coincidan por empresa/portafolio/título con lo que el usuario
+// escribió salgan primero. No toca el orden que ya trae cada subgrupo entre
+// sí (sort estable), solo separa "coincide" de "no coincide".
+// OJO: esto es un reordenamiento en el frontend sobre lo que ya devolvió el
+// backend en esa página de resultados; si el backend pagina (offset/limit),
+// esto NO reordena contra resultados que todavía no se han cargado.
+function prioritizeByCompanyMatch<T>(items: T[], query: string): T[] {
+  const q = normalize(query);
+  if (!q) return items;
+
+  const matches: T[] = [];
+  const rest: T[] = [];
+
+  for (const item of items) {
+    const { company, portfolio, convenioName } = parseMeta(item);
+    const title = String((item as any).title ?? "");
+    const haystack = normalize(`${company ?? ""} ${portfolio ?? ""} ${convenioName ?? ""} ${title}`);
+    if (haystack.includes(q)) {
+      matches.push(item);
+    } else {
+      rest.push(item);
+    }
+  }
+  return [...matches, ...rest];
+}
+
+// Indicador de carga tipo "escribiendo...": el texto + 3 puntos que rebotan
+// con un pequeño desfase entre ellos, para que se vea como una ola.
+function SearchingIndicator({ label = "Buscando" }: { label?: string }) {
+  return (
+    <div className="p-4 flex items-center justify-center gap-2 text-xs text-slate-400">
+      <span>{label}</span>
+      <span className="flex items-end gap-0.5 h-3">
+        <span className="w-1.5 h-1.5 rounded-full bg-slate-400 animate-bounce [animation-delay:-0.3s]" />
+        <span className="w-1.5 h-1.5 rounded-full bg-slate-400 animate-bounce [animation-delay:-0.15s]" />
+        <span className="w-1.5 h-1.5 rounded-full bg-slate-400 animate-bounce" />
+      </span>
+    </div>
+  );
 }
 
 /**
@@ -81,6 +182,20 @@ export function GlobalSearch({
   const { results, isLoading, isLoadingMore, isOpen, setIsOpen, hasMore, loadMore } = useSearch(query);
   const { hasPermission, loading: permsLoading } = usePermissions();
   const router = useRouter();
+
+  // Fila expandida en el desplegable (por id). Al hacer clic, la fila crece
+  // un poco hacia abajo y muestra la info completa sin truncar + el botón
+  // para ir a la ficha, en vez de saltar directo o abrir un modal encima.
+  const [expandedId, setExpandedId] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (!expandedId) return;
+    const handleEscape = (e: KeyboardEvent) => {
+      if (e.key === "Escape") setExpandedId(null);
+    };
+    window.addEventListener("keydown", handleEscape);
+    return () => window.removeEventListener("keydown", handleEscape);
+  }, [expandedId]);
 
   useEffect(() => {
     if (!autoFocus) return;
@@ -110,15 +225,34 @@ export function GlobalSearch({
   }, [results, hasPermission, permsLoading]);
 
   const groups = useMemo(() => {
+    const convenios = filteredResults.filter((r: any) => r.type === "Convenio");
+    const procedimientos = filteredResults.filter((r: any) => r.type === "Procedimiento");
     return {
-      convenios: filteredResults.filter((r: any) => r.type === "Convenio"),
-      procedimientos: filteredResults.filter((r: any) => r.type === "Procedimiento"),
+      convenios: prioritizeByCompanyMatch(convenios, query),
+      procedimientos: prioritizeByCompanyMatch(procedimientos, query),
     };
-  }, [filteredResults]);
+  }, [filteredResults, query]);
 
   const clearSearch = () => {
     onQueryChange("");
     inputRef.current?.focus();
+  };
+
+  // FIX: antes, esto solo llamaba a onQueryChange y dependía de que `isOpen`
+  // (que viene del hook useSearch) cambiara por su cuenta. Si la primera vez
+  // que se hacía focus el query estaba vacío, `onFocus` nunca abría el
+  // desplegable, y como aquí tampoco se forzaba `setIsOpen(true)`, la
+  // primera búsqueda se quedaba "muda" hasta salir y volver a entrar al
+  // input (ahí sí `onFocus` encontraba `query.length > 0`).
+  // Ahora abrimos el desplegable apenas hay texto, sin depender de un
+  // focus/blur previo.
+  const handleQueryChange = (value: string) => {
+    onQueryChange(value);
+    if (value.trim().length > 0) {
+      setIsOpen(true);
+    } else {
+      setIsOpen(false);
+    }
   };
 
   const handleSearch = (e: React.KeyboardEvent) => {
@@ -139,6 +273,7 @@ export function GlobalSearch({
 
     router.push(item.route); // ya viene armado desde el backend
     setIsOpen(false);
+    setExpandedId(null);
     onQueryChange("");
   };
 
@@ -154,74 +289,169 @@ export function GlobalSearch({
 
   const renderResultRow = (item: any) => {
     const isConvenio = item.type === "Convenio";
-    const { code, portfolio, company } = parseMeta(item);
+    const { code: metaCode, portfolio, company, price, convenioName } = parseMeta(item);
     const estado = item.estado as "sin_tarifario" | "pendiente_digitacion" | undefined;
+
+    // El código puede venir como campo propio (metaCode) o pegado al
+    // inicio del título ("088402 SUTURA..."). Si viene en el título, se
+    // saca de ahí para mostrarlo como badge y no repetirlo en el texto.
+    const { code: titleCode, title: displayTitle } = extractCodeFromTitle(String(item.title ?? ""));
+    const code = metaCode ?? titleCode;
+
+    const isExpanded = expandedId === item.id;
+    const canNavigate = isConvenio ? hasPermission("view_companies") : hasPermission("procedures:view");
 
     return (
       <div
         key={item.id}
-        onClick={() => handleNavigation(item)}
-        className="p-3 hover:bg-slate-50 rounded-lg cursor-pointer transition-colors flex items-start gap-3"
+        className={`rounded-lg transition-colors ${isExpanded ? "bg-slate-50" : "hover:bg-slate-50"}`}
       >
         <div
-          className={`w-9 h-9 rounded-lg flex items-center justify-center shrink-0 ${
-            isConvenio ? "bg-primary/10 text-primary" : "bg-green/10 text-green"
-          }`}
+          onClick={() => setExpandedId(isExpanded ? null : item.id)}
+          className="p-3 cursor-pointer flex items-start gap-3"
         >
-          {isConvenio ? <Building2 size={17} /> : <Stethoscope size={17} />}
-        </div>
-
-        <div className="flex-1 min-w-0">
-          <div className="flex items-center gap-2">
-            <span className="text-[13px] font-semibold text-navy truncate">{item.title}</span>
-            {/* Spec §5: si el convenio está sin tarifario o pendiente, se avisa antes del click */}
-            {estado === "sin_tarifario" && (
-              <span className="shrink-0 text-[10px] font-semibold text-rose-600 bg-rose-50 rounded-full px-2 py-0.5">
-                Sin tarifario
-              </span>
-            )}
-            {estado === "pendiente_digitacion" && (
-              <span className="shrink-0 text-[10px] font-semibold text-amber-600 bg-amber-50 rounded-full px-2 py-0.5">
-                Pendiente digitación
-              </span>
-            )}
+          <div
+            className={`w-9 h-9 rounded-lg flex items-center justify-center shrink-0 ${
+              isConvenio ? "bg-primary/10 text-primary" : "bg-green/10 text-green"
+            }`}
+          >
+            {isConvenio ? <Building2 size={17} /> : <Stethoscope size={17} />}
           </div>
 
-          <div className="mt-1 flex flex-col gap-0.5 text-[11px] text-slate-500">
-            <div className="flex items-center gap-3">
-              {code && (
-                <span className="flex items-center gap-1 shrink-0" title="Código">
-                  <Hash size={11} className="text-slate-400" />
-                  <span className="font-mono">{code}</span>
-                </span>
-              )}
-              {portfolio && (
-                <span className="flex items-center gap-1 min-w-0" title={`Portafolio: ${portfolio}`}>
-                  <Layers size={11} className="text-slate-400 shrink-0" />
-                  <span className="truncate">{portfolio}</span>
+          <div className="flex-1 min-w-0">
+            <div className="flex items-center justify-between gap-2">
+              <div className="flex items-center gap-2 min-w-0">
+                <span className="text-[13px] font-semibold text-navy truncate">{displayTitle}</span>
+                {/* Spec §5: si el convenio está sin tarifario o pendiente, se avisa antes del click */}
+                {estado === "sin_tarifario" && (
+                  <span className="shrink-0 text-[10px] font-semibold text-rose-600 bg-rose-50 rounded-full px-2 py-0.5">
+                    Sin tarifario
+                  </span>
+                )}
+                {estado === "pendiente_digitacion" && (
+                  <span className="shrink-0 text-[10px] font-semibold text-amber-600 bg-amber-50 rounded-full px-2 py-0.5">
+                    Pendiente digitación
+                  </span>
+                )}
+              </div>
+
+              {/* Precio: siempre en verde y en negrita, va aparte del resto de
+                  datos (no reemplaza ni tapa código/portafolio/empresa). */}
+              {price && (
+                <span className="shrink-0 text-[12px] font-bold text-emerald-600">
+                  {formatPrice(price)}
                 </span>
               )}
             </div>
 
-            {company && (
-              <span className="flex items-center gap-1 min-w-0" title={`Empresa: ${company}`}>
-                <Briefcase size={11} className="text-slate-400 shrink-0" />
-                <span className="truncate">{company}</span>
-              </span>
-            )}
+            {/* Cada dato tiene su propio color/ícono fijo en toda la app:
+                gris = código, morado = empresa, índigo = nombre del convenio,
+                azul = portafolio.
+                Se muestra siempre que exista el dato, sin importar si
+                también hay precio arriba. */}
+            <div className="mt-1.5 flex flex-wrap items-center gap-1.5">
+              {code && (
+                <span
+                  className="flex items-center gap-1 shrink-0 text-[10px] font-mono font-semibold text-slate-600 bg-slate-100 rounded-full px-2 py-0.5"
+                  title="Código"
+                >
+                  <Hash size={10} />
+                  {code}
+                </span>
+              )}
+              {company && (
+                <span
+                  className="flex items-center gap-1 min-w-0 max-w-[180px] text-[10px] font-medium text-purple-600 bg-purple-50 rounded-full px-2 py-0.5"
+                  title={`Empresa: ${company}`}
+                >
+                  <Briefcase size={10} className="shrink-0" />
+                  <span className="truncate">{company}</span>
+                </span>
+              )}
+              {/* Nombre del convenio: va antes que el portafolio.
+                  OJO: revisar que `convenioName` mapee al campo real que
+                  manda el backend (ver nota en parseMeta). */}
+              {convenioName && (
+                <span
+                  className="flex items-center gap-1 min-w-0 max-w-[180px] text-[10px] font-medium text-indigo-600 bg-indigo-50 rounded-full px-2 py-0.5"
+                  title={`Convenio: ${convenioName}`}
+                >
+                  <FileText size={10} className="shrink-0" />
+                  <span className="truncate">{convenioName}</span>
+                </span>
+              )}
+              {portfolio && (
+                <span
+                  className="flex items-center gap-1 min-w-0 max-w-[180px] text-[10px] font-medium text-blue-600 bg-blue-50 rounded-full px-2 py-0.5"
+                  title={`Portafolio: ${portfolio}`}
+                >
+                  <Layers size={10} className="shrink-0" />
+                  <span className="truncate">{portfolio}</span>
+                </span>
+              )}
 
-            {!code && !portfolio && !company && item.details && (
-              <span className="truncate" title={item.details}>
-                {item.details}
-              </span>
-            )}
+              {/* Fallback: si no se pudo reconocer ningún campo, se muestra
+                  el texto crudo tal cual venga. */}
+              {!code && !portfolio && !company && !convenioName && item.details && (
+                <span className="truncate text-[11px] text-slate-500" title={item.details}>
+                  {item.details}
+                </span>
+              )}
+            </div>
           </div>
+
+          <span
+            className={`shrink-0 mt-0.5 w-2 h-2 rounded-full ${isConvenio ? "bg-primary" : "bg-green"}`}
+            title={item.type}
+          />
         </div>
 
-        <span
-          className={`shrink-0 mt-0.5 w-2 h-2 rounded-full ${isConvenio ? "bg-primary" : "bg-green"}`}
-          title={item.type}
-        />
+        {/* Panel expandible: usamos el truco de grid-template-rows 0fr -> 1fr
+            para animar el alto sin conocerlo de antemano (funciona mejor que
+            max-height, que hay que adivinarlo a mano). */}
+        <div
+          className={`grid transition-[grid-template-rows] duration-200 ease-out ${
+            isExpanded ? "grid-rows-[1fr]" : "grid-rows-[0fr]"
+          }`}
+        >
+          <div className="overflow-hidden">
+            <div className="px-3 pb-3 pl-[3.25rem] pt-1 space-y-2">
+              {/* Texto completo, sin truncar, de lo que en la fila de arriba
+                  va cortado con "truncate" por el ancho del badge. */}
+              {company && (
+                <div className="flex items-start gap-1.5 text-[12px]">
+                  <span className="text-slate-400 shrink-0">Empresa:</span>
+                  <span className="text-navy font-medium">{company}</span>
+                </div>
+              )}
+              {convenioName && (
+                <div className="flex items-start gap-1.5 text-[12px]">
+                  <span className="text-slate-400 shrink-0">Convenio:</span>
+                  <span className="text-navy font-medium">{convenioName}</span>
+                </div>
+              )}
+              {portfolio && (
+                <div className="flex items-start gap-1.5 text-[12px]">
+                  <span className="text-slate-400 shrink-0">Portafolio:</span>
+                  <span className="text-navy font-medium">{portfolio}</span>
+                </div>
+              )}
+
+              <button
+                type="button"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  handleNavigation(item);
+                }}
+                disabled={!canNavigate}
+                className="cursor-pointer mt-1 flex items-center gap-1.5 text-[12px] font-semibold text-primary hover:text-primary-dark transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
+              >
+                Ir a la ficha del {isConvenio ? "convenio" : "procedimiento"}
+                <ArrowRight size={13} />
+              </button>
+            </div>
+          </div>
+        </div>
       </div>
     );
   };
@@ -240,7 +470,7 @@ export function GlobalSearch({
           ref={inputRef}
           type="text"
           value={query}
-          onChange={(e) => onQueryChange(e.target.value)}
+          onChange={(e) => handleQueryChange(e.target.value)}
           onKeyDown={handleSearch}
           onBlur={() => setTimeout(() => setIsOpen(false), 200)}
           onFocus={() => query.length > 0 && setIsOpen(true)}
@@ -276,10 +506,11 @@ export function GlobalSearch({
       {isOpen && query.length > 0 && (
         <div
           onScroll={handleDropdownScroll}
+          onMouseDown={(e) => e.preventDefault()}
           className="absolute top-full mt-2 w-full bg-white border border-slate-100 rounded-xl shadow-lg p-2 max-h-96 overflow-y-auto z-[100] text-left"
         >
           {isLoading || permsLoading ? (
-            <div className="p-4 text-center text-xs text-slate-400">Buscando...</div>
+            <SearchingIndicator />
           ) : filteredResults.length > 0 ? (
             <>
               {groups.convenios.length > 0 && (
@@ -301,8 +532,12 @@ export function GlobalSearch({
 
               {isLoadingMore && (
                 <div className="p-3 flex items-center justify-center gap-2 text-xs text-slate-400">
-                  <Loader2 size={13} className="animate-spin" />
-                  Cargando más...
+                  <span>Cargando</span>
+                  <span className="flex items-end gap-0.5 h-3">
+                    <span className="w-1.5 h-1.5 rounded-full bg-slate-400 animate-bounce [animation-delay:-0.3s]" />
+                    <span className="w-1.5 h-1.5 rounded-full bg-slate-400 animate-bounce [animation-delay:-0.15s]" />
+                    <span className="w-1.5 h-1.5 rounded-full bg-slate-400 animate-bounce" />
+                  </span>
                 </div>
               )}
 
