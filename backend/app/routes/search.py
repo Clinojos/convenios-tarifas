@@ -1,6 +1,7 @@
 from typing import List, Optional
 from fastapi import APIRouter, Depends
 from sqlmodel import Session, select, or_, and_
+from sqlalchemy import case, func
 from pydantic import BaseModel
 
 from ..db import get_session_hosvital
@@ -57,6 +58,18 @@ def _procedure_term_filter(term: str):
     )
 
 
+# MEestado: '0' = Activo, '1' = Inactivo (invertido). Este CASE hace que
+# SQL calcule "activo primero" ANTES de aplicar OFFSET/LIMIT, para que la
+# separación activo/inactivo sea estable en toda la lista y no solo dentro
+# de la página que ya se cargó (eso era lo que antes se intentaba arreglar
+# a mano en el frontend, y no podía funcionar bien con paginación).
+def _active_first_order(estado_col):
+    return case(
+        (func.rtrim(func.ltrim(estado_col)) == "0", 0),
+        else_=1,
+    )
+
+
 def _search_agreements(session: Session, q: str, limit: int, offset: int) -> tuple[list[dict], bool]:
     terms = _tokenize(q)
     term_conditions = [_agreement_term_filter(t) for t in terms]
@@ -65,7 +78,7 @@ def _search_agreements(session: Session, q: str, limit: int, offset: int) -> tup
         select(Agreement)
         .where(Agreement.MENNIT.isnot(None))
         .where(and_(*term_conditions))
-        .order_by(Agreement.MENNIT)
+        .order_by(_active_first_order(Agreement.MEestado), Agreement.MENNIT)
         .offset(offset)
         .limit(limit + 1)
     )
@@ -76,7 +89,6 @@ def _search_agreements(session: Session, q: str, limit: int, offset: int) -> tup
 
     out = []
     for a in agreements:
-        # MEestado: '0' = Activo, '1' = Inactivo (invertido, igual que en agreements.py)
         is_active = str(a.MEestado).strip() == "0"
         out.append({
             "id": f"conv-{str(a.MENNIT).strip()}",
@@ -116,10 +128,17 @@ def _search_procedures(session: Session, q: str, limit: int, offset: int) -> tup
         )
         .where(PortfolioItem.PTIndExc == "N")
         .where(and_(*term_conditions))
-        # MSSQL exige ORDER BY para poder usar OFFSET/LIMIT; ordenamos por
-        # código de procedimiento + convenio + portafolio para que las
-        # páginas sean estables y no salgan filas repetidas/saltadas
-        .order_by(Procedure.PRCODI, Agreement.MENNIT, Portfolio.PTCodi)
+        # El procedimiento hereda el estado del convenio (Agreement.MEestado),
+        # así que ese es el campo que hay que usar acá para "activos primero".
+        # Se mantiene el resto del orden (PRCODI, MENNIT, PTCodi) como
+        # criterio de desempate, igual que antes, para que las páginas
+        # sigan siendo estables (MSSQL exige ORDER BY para usar OFFSET/LIMIT).
+        .order_by(
+            _active_first_order(Agreement.MEestado),
+            Procedure.PRCODI,
+            Agreement.MENNIT,
+            Portfolio.PTCodi,
+        )
         .offset(offset)
         .limit(limit + 1)
     )
@@ -140,17 +159,8 @@ def _search_procedures(session: Session, q: str, limit: int, offset: int) -> tup
         final_price = round(base * item.PTPorc / 100, 2)
         contract_key = str(agreement.MENNIT).strip()
         company_key = effective_company_key(agreement.MEcntr, agreement.MENNIT)
-        # Nombre del convenio propiamente dicho (MENOMB), independiente de
-        # si TERCEROS tiene o no el nombre "oficial" de la empresa. Antes
-        # este valor solo se usaba como fallback de company_name cuando
-        # TERCEROS no tenía coincidencia, y nunca se exponía como campo
-        # propio -> por eso el frontend nunca podía mostrar el convenio
-        # junto con empresa/portafolio en los resultados de Procedimiento.
         convenio_name = str(agreement.MENOMB).strip() if agreement.MENOMB else ""
         company_name = terceros_map.get(company_key) or convenio_name
-        # MEestado: '0' = Activo, '1' = Inactivo (mismo criterio que en
-        # _search_agreements y en agreements.py). El procedimiento en sí no
-        # tiene estado propio -> hereda el del convenio al que pertenece.
         is_active = str(agreement.MEestado).strip() == "0"
 
         out.append({

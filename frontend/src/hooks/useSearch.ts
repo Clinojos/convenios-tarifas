@@ -7,6 +7,11 @@ const PAGE_SIZE = 8;
 export function useSearch(query: string) {
   const [results, setResults] = useState<any[]>([]);
   const [isLoading, setIsLoading] = useState(false);
+  // true desde que cambia el texto hasta que se dispara el fetch real
+  // (cubre la espera del debounce). Mientras esto es true, el dropdown no
+  // muestra nada (ni "buscando" ni "no encontrado") — eso solo se decide
+  // cuando isPending pasa a false e isLoading toma el control.
+  const [isPending, setIsPending] = useState(false);
   const [isLoadingMore, setIsLoadingMore] = useState(false);
   const [isOpen, setIsOpen] = useState(false);
   const [hasMore, setHasMore] = useState(false);
@@ -29,14 +34,26 @@ export function useSearch(query: string) {
       setResults([]);
       setIsOpen(false);
       setHasMore(false);
+      setIsLoading(false);
+      setIsPending(false);
       offsetRef.current = 0;
       return;
     }
+
+    // Se marca "pendiente" YA, apenas cambia el texto. Como este efecto se
+    // vuelve a correr en cada tecleo (limpiando el setTimeout anterior),
+    // isPending se queda en true de forma continua mientras el usuario
+    // sigue escribiendo — recién se apaga cuando pasan 300ms sin cambios
+    // y arranca el fetch real.
+    setIsPending(true);
 
     const handler = setTimeout(async () => {
       const controller = new AbortController();
       abortRef.current = controller;
 
+      // Acá sí arranca la búsqueda de verdad: se apaga "pendiente" y se
+      // prende "cargando", que es lo único que dispara el "Buscando...".
+      setIsPending(false);
       setIsLoading(true);
       offsetRef.current = 0;
       try {
@@ -94,6 +111,7 @@ export function useSearch(query: string) {
   return {
     results,
     isLoading,
+    isPending,
     isLoadingMore,
     isOpen,
     setIsOpen,

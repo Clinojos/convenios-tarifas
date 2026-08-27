@@ -254,32 +254,6 @@ function parseMeta(item: any) {
 // "COMPENSAR" o "Compénsar".
 const normalize = (s: string) => stripAccents(String(s ?? "")).toLowerCase();
 
-// Reordena los resultados de un grupo (convenios o procedimientos) para que
-// los que coincidan por empresa/portafolio/título con lo que el usuario
-// escribió salgan primero. No toca el orden que ya trae cada subgrupo entre
-// sí (sort estable), solo separa "coincide" de "no coincide".
-// OJO: esto es un reordenamiento en el frontend sobre lo que ya devolvió el
-// backend en esa página de resultados; si el backend pagina (offset/limit),
-// esto NO reordena contra resultados que todavía no se han cargado.
-function prioritizeByCompanyMatch<T>(items: T[], query: string): T[] {
-  const q = normalize(query);
-  if (!q) return items;
-
-  const matches: T[] = [];
-  const rest: T[] = [];
-
-  for (const item of items) {
-    const { company, portfolio, convenioName } = parseMeta(item);
-    const title = String((item as any).title ?? "");
-    const haystack = normalize(`${company ?? ""} ${portfolio ?? ""} ${convenioName ?? ""} ${title}`);
-    if (haystack.includes(q)) {
-      matches.push(item);
-    } else {
-      rest.push(item);
-    }
-  }
-  return [...matches, ...rest];
-}
 
 // Indicador de carga tipo "escribiendo...": el texto + 3 puntos que rebotan
 // con un pequeño desfase entre ellos, para que se vea como una ola.
@@ -313,7 +287,7 @@ export function GlobalSearch({
   className = "",
 }: GlobalSearchProps) {
   const inputRef = useRef<HTMLInputElement>(null);
-  const { results, isLoading, isLoadingMore, isOpen, setIsOpen, hasMore, loadMore } = useSearch(query);
+  const { results, isLoading, isPending, isLoadingMore, isOpen, setIsOpen, hasMore, loadMore } = useSearch(query);
   const { hasPermission, loading: permsLoading } = usePermissions();
   const router = useRouter();
 
@@ -358,28 +332,17 @@ export function GlobalSearch({
     });
   }, [results, hasPermission, permsLoading]);
 
-  const groups = useMemo(() => {
+    const groups = useMemo(() => {
     const convenios = filteredResults.filter((r: any) => r.type === "Convenio");
     const procedimientos = filteredResults.filter((r: any) => r.type === "Procedimiento");
-    return {
-      convenios: prioritizeByCompanyMatch(convenios, query),
-      procedimientos: prioritizeByCompanyMatch(procedimientos, query),
-    };
-  }, [filteredResults, query]);
+    return { convenios, procedimientos };
+  }, [filteredResults]);
 
   const clearSearch = () => {
     onQueryChange("");
     inputRef.current?.focus();
   };
 
-  // FIX: antes, esto solo llamaba a onQueryChange y dependía de que `isOpen`
-  // (que viene del hook useSearch) cambiara por su cuenta. Si la primera vez
-  // que se hacía focus el query estaba vacío, `onFocus` nunca abría el
-  // desplegable, y como aquí tampoco se forzaba `setIsOpen(true)`, la
-  // primera búsqueda se quedaba "muda" hasta salir y volver a entrar al
-  // input (ahí sí `onFocus` encontraba `query.length > 0`).
-  // Ahora abrimos el desplegable apenas hay texto, sin depender de un
-  // focus/blur previo.
   const handleQueryChange = (value: string) => {
     onQueryChange(value);
     if (value.trim().length > 0) {
@@ -640,7 +603,7 @@ export function GlobalSearch({
         )}
       </div>
 
-      {isOpen && query.length > 0 && (
+      {isOpen && query.length > 0 && !isPending && (
         <div
           onScroll={handleDropdownScroll}
           onMouseDown={(e) => e.preventDefault()}
