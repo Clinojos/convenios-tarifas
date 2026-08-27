@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useCallback } from "react";
+import { useState, useCallback, useRef } from "react";
 import { API_BASE_URL } from "@/config/api";
 import { getToken } from "@/lib/getToken";
 
@@ -44,11 +44,18 @@ export function useTarifario(contractKey: string) {
   const [items, setItems] = useState<PriceItem[]>([]);
   const [total, setTotal] = useState(0);
   const [page, setPage] = useState(1);
+  const [limit, setLimit] = useState(10); // valor inicial de arranque, se recalcula en el componente según el alto disponible
   const [loadingItems, setLoadingItems] = useState(false);
 
   const [error, setError] = useState<string | null>(null);
 
-  // 1. Trae los portafolios reales del convenio
+  // Referencia a la petición de items en vuelo. Cuando sale una petición
+  // nueva, cancelamos la anterior con AbortController. Así, si el scroll
+  // dispara varios recálculos de rowsPerPage seguidos (varios fetch en
+  // paralelo), solo la última puede terminar actualizando el estado — las
+  // anteriores se abortan y nunca pisan total/page/items con datos viejos.
+  const abortRef = useRef<AbortController | null>(null);
+
   const fetchPortfolios = useCallback(async () => {
     setLoadingPortfolios(true);
     setError(null);
@@ -69,9 +76,21 @@ export function useTarifario(contractKey: string) {
     }
   }, [contractKey]);
 
-  // 2. Trae los procedimientos de un portafolio, paginados
+  // Ahora recibe el limit como parámetro: quien llama decide cuántas filas
+  // pedir (TarifarioBlock lo calcula según el alto disponible en pantalla).
   const fetchItems = useCallback(
-    async (portfolioCode: string, q?: string, pageArg: number = 1) => {
+    async (
+      portfolioCode: string,
+      q: string | undefined,
+      pageArg: number,
+      limitArg: number,
+    ) => {
+      // Cancela cualquier petición anterior que siga en vuelo antes de
+      // lanzar esta.
+      abortRef.current?.abort();
+      const controller = new AbortController();
+      abortRef.current = controller;
+
       setLoadingItems(true);
       setError(null);
       try {
@@ -79,19 +98,29 @@ export function useTarifario(contractKey: string) {
         url.searchParams.set("portfolio_code", portfolioCode);
         if (q) url.searchParams.set("q", q);
         url.searchParams.set("page", String(pageArg));
-        url.searchParams.set("limit", String(PAGE_LIMIT));
+        url.searchParams.set("limit", String(limitArg));
 
-        const res = await fetch(url.toString(), { headers: authHeaders() });
+        const res = await fetch(url.toString(), {
+          headers: authHeaders(),
+          signal: controller.signal,
+        });
         if (!res.ok)
           throw new Error(`Error ${res.status} cargando procedimientos`);
         const data: PriceItemsResponse = await res.json();
+
+        // Por si, entre el fetch y el json(), ya salió una petición más
+        // nueva: no pisamos el estado con esta respuesta obsoleta.
+        if (abortRef.current !== controller) return;
+
         setItems(data.data);
         setTotal(data.total);
         setPage(data.page);
+        setLimit(data.limit ?? limitArg);
       } catch (err: any) {
+        if (err.name === "AbortError") return; // cancelada a propósito, no es un error real
         setError(err.message);
       } finally {
-        setLoadingItems(false);
+        if (abortRef.current === controller) setLoadingItems(false);
       }
     },
     [],
@@ -103,7 +132,7 @@ export function useTarifario(contractKey: string) {
     items,
     total,
     page,
-    limit: PAGE_LIMIT,
+    limit,
     loadingItems,
     error,
     fetchPortfolios,

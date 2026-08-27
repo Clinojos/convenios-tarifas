@@ -68,10 +68,6 @@ export function ConvenioCard({ convenio: g, index: i, onOpen }: ConvenioCardProp
         <span className="text-slate-400">
           {g.total_variants} convenio{g.total_variants !== 1 ? "s" : ""}
         </span>
-        <span className="text-slate-300">·</span>
-        <span className={`font-medium ${esDescuento ? "text-purple-500" : "text-blue-500"}`}>
-          {esDescuento ? "Descuento" : "Tarifario propio"}
-        </span>
       </div>
 
       {/* Aviso — solo aparece cuando hay un problema real que resolver */}

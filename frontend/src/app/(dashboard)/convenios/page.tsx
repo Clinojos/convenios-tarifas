@@ -44,10 +44,6 @@ function ConveniosContent() {
     router.push(`/convenios?${params.toString()}`);
   };
 
-  // Empresa con 1 sola variante -> directo a la ficha de detalle (y se
-  // registra la visita ahí mismo, porque ya tenemos un contract_key único).
-  // Empresa con varias variantes -> pantalla intermedia de selección; el
-  // registro ocurre en GrupoConvenioPage cuando elige la variante específica.
   const openConvenio = (convenio: ConvenioGroup) => {
     if (convenio.total_variants <= 1) {
       const contractKey = convenio.variant_keys?.[0] ?? convenio.group_key;
@@ -58,8 +54,9 @@ function ConveniosContent() {
     }
   };
 
-  if (loading) return <Loading />;
-
+  // OJO: ya NO hacemos `if (loading) return <Loading />`.
+  // El layout (header, FilterBar, Pagination) se queda siempre montado
+  // y solo la grilla cambia entre skeleton / datos / empty state.
   return (
     <div className="max-w-[1400px] mx-auto p-4 space-y-4 font-sans flex flex-col h-full">
       <div className="flex flex-col gap-2">
@@ -84,7 +81,7 @@ function ConveniosContent() {
       </div>
 
       <div className="flex-1">
-        <ConveniosGrid convenios={convenios} onOpen={openConvenio} />
+        <ConveniosGrid convenios={convenios} onOpen={openConvenio} loading={loading} />
       </div>
 
       <Pagination page={page} totalPages={totalPages} onPageChange={handlePageChange} />

@@ -1,5 +1,4 @@
 import { Sidebar } from "@/components/layout/Sidebar";
-import { Header } from "@/components/layout/Header";
 
 export default function DashboardLayout({ children }: { children: React.ReactNode }) {
   return (
@@ -15,10 +14,10 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
           min-w-0 es clave: evita que el contenido interno (tablas, texto largo)
           empuje el layout y rompa el ancho cuando el sidebar cambia de tamaño. */}
       <div className="flex-1 flex flex-col min-w-0 h-full">
-        <Header />
 
         {/* 4. IMPORTANTE: Esto es lo que permite que el contenido sea scrollable
-            sin estirar el layout hacia abajo */}
+            sin estirar el layout hacia abajo. Al quitar el Header, main ahora
+            ocupa todo el alto disponible del lado derecho. */}
         <main className="flex-1 overflow-y-auto p-8">
           <div className="max-w-[95%] mx-auto h-full">
             {children}

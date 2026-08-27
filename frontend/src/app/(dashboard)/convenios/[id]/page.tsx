@@ -26,8 +26,13 @@ function SkeletonBlock({ className = "" }: { className?: string }) {
 }
 
 function ConvenioDetalleSkeleton() {
+  // h-full (no h-dvh): esta página vive dentro de <main> del DashboardLayout,
+  // que ya tiene su propio alto (viewport - padding). Si pedimos h-dvh aquí
+  // (100% del viewport) nos pasamos del espacio real disponible dentro de
+  // main (que tiene p-8) y eso hace que "main" scrollee toda la página en
+  // vez de que el scroll interno del panel activo haga su trabajo.
   return (
-    <div className="mx-auto flex h-dvh max-w-[1400px] flex-col gap-4 overflow-hidden p-4 font-sans animate-pulse">
+    <div className="mx-auto flex h-full max-w-[1400px] flex-col gap-4 overflow-hidden font-sans animate-pulse">
       <SkeletonBlock className="h-10 w-64 rounded-2xl" />
 
       <div className="flex shrink-0 flex-col gap-3 rounded-2xl border border-slate-100 bg-white p-4 shadow-sm sm:flex-row sm:items-center sm:justify-between">
@@ -133,11 +138,8 @@ function TabPanel({
   highlightCode?: string;
 }) {
   if (activeTab === "portafolio") {
-    // h-full + overflow-y-auto: el contenedor mantiene una altura fija
-    // (la de la fila que le da el padre), y si TarifarioBlock crece más de
-    // lo que cabe, el scroll ocurre AQUÍ ADENTRO, no en la página completa.
     return (
-      <div className="min-w-0 flex-1 overflow-y-auto h-full">
+      <div className="min-w-0 flex-1 h-full">
         <TarifarioBlock
           contractKey={convenio.contract_key}
           onPortfoliosChange={onPortfoliosChange}
@@ -215,7 +217,7 @@ export default function ConvenioDetallePage() {
 
   if (error || !convenio) {
     return (
-      <div className="mx-auto flex h-dvh max-w-[1400px] flex-col gap-4 overflow-hidden p-4 font-sans">
+      <div className="mx-auto flex h-full max-w-[1400px] flex-col gap-4 overflow-hidden font-sans">
         <Breadcrumb
           items={[
             { id: "home", label: "Convenios", icon: Home, onClick: () => router.push("/convenios") },
@@ -265,12 +267,16 @@ export default function ConvenioDetallePage() {
   ];
 
   return (
-    // h-dvh + overflow-hidden en la raíz: la página nunca hace scroll como
-    // un todo. Header con altura natural (shrink-0) y, debajo, una sola fila
+    // h-full (no h-dvh) + overflow-hidden en la raíz: esta página ya no
+    // asume que es dueña del viewport completo, sino que respeta el alto
+    // que le da <main> en el DashboardLayout (que a su vez es
+    // "viewport - padding"). Con h-dvh aquí, el contenido siempre era un
+    // poco más alto que ese espacio real y disparaba el scroll de "main".
+    // Header con altura natural (shrink-0) y, debajo, una sola fila
     // que ocupa el resto del alto disponible (flex-1 min-h-0) — ahí es donde
     // el panel activo tiene su propio scroll interno si el contenido no cabe
     // (ver TabPanel).
-    <div className="mx-auto flex h-dvh max-w-[1400px] flex-col gap-4 overflow-hidden p-4 font-sans">
+    <div className="mx-auto flex h-full max-w-[1400px] flex-col gap-4 overflow-hidden font-sans">
       {/* Breadcrumb — ahora incluye la empresa cuando el convenio pertenece a un grupo */}
       <Breadcrumb items={breadcrumbItems} />
 

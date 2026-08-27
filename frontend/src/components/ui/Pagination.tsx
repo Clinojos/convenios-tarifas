@@ -1,4 +1,3 @@
-// components/ui/Pagination.tsx
 "use client";
 
 import { ChevronLeft, ChevronRight } from "lucide-react";
@@ -10,7 +9,7 @@ interface PaginationProps {
 }
 
 function getPageNumbers(page: number, totalPages: number): (number | "...")[] {
-  const delta = 1; // páginas vecinas a mostrar a cada lado de la actual
+  const delta = 1;
   const range: (number | "...")[] = [];
 
   for (let i = 1; i <= totalPages; i++) {
@@ -28,25 +27,30 @@ function getPageNumbers(page: number, totalPages: number): (number | "...")[] {
 }
 
 export function Pagination({ page, totalPages, onPageChange }: PaginationProps) {
-  if (totalPages === 0) return null; // solo ocultar si no hay datos
+  if (totalPages <= 1) return null; // con 1 sola página no aporta nada, mejor ni mostrarla
 
   const pages = getPageNumbers(page, totalPages);
 
   return (
-    <div className="flex items-center justify-center gap-1.5 pt-3 pb-2 border-t border-slate-100">
+    <div className="flex items-center justify-center gap-1.5 py-1">
       <button
         disabled={page === 1}
         onClick={() => onPageChange(page - 1)}
-        className="cursor-pointer flex items-center gap-1 text-[11px] font-medium px-3 py-1.5 rounded-lg border border-slate-200 text-slate-600 disabled:opacity-40 disabled:cursor-not-allowed hover:border-slate-300 hover:text-slate-800 transition-colors"
+        aria-label="Página anterior"
+        className="cursor-pointer flex h-8 w-8 items-center justify-center rounded-full text-slate-400 
+                   transition-colors hover:bg-slate-100 hover:text-slate-700
+                   disabled:opacity-0 disabled:pointer-events-none"
       >
-        <ChevronLeft size={13} />
-        Anterior
+        <ChevronLeft size={16} />
       </button>
 
-      <div className="flex items-center gap-1 mx-1">
+      <div className="flex items-center gap-1">
         {pages.map((p, i) =>
           p === "..." ? (
-            <span key={`dots-${i}`} className="w-8 h-8 flex items-center justify-center text-[12px] text-slate-300 select-none">
+            <span
+              key={`dots-${i}`}
+              className="w-8 h-8 flex items-center justify-center text-[12px] text-slate-300 select-none"
+            >
               ···
             </span>
           ) : (
@@ -54,11 +58,11 @@ export function Pagination({ page, totalPages, onPageChange }: PaginationProps) 
               key={p}
               onClick={() => onPageChange(p)}
               aria-current={p === page ? "page" : undefined}
-              className={`cursor-pointer w-8 h-8 flex items-center justify-center rounded-lg text-[12.5px] font-semibold border transition-colors
+              className={`cursor-pointer h-8 w-8 flex items-center justify-center rounded-full text-[12.5px] font-semibold transition-all
                 ${
                   p === page
-                    ? "bg-navy border-navy text-white shadow-sm"
-                    : "border-transparent text-slate-500 hover:border-slate-200 hover:bg-slate-50 hover:text-slate-700"
+                    ? "bg-primary text-white shadow-sm shadow-primary/30"
+                    : "text-slate-500 hover:bg-slate-100 hover:text-slate-800"
                 }`}
             >
               {p}
@@ -70,10 +74,12 @@ export function Pagination({ page, totalPages, onPageChange }: PaginationProps) 
       <button
         disabled={page >= totalPages}
         onClick={() => onPageChange(page + 1)}
-        className="cursor-pointer flex items-center gap-1 text-[11px] font-medium px-3 py-1.5 rounded-lg border border-slate-200 text-slate-600 disabled:opacity-40 disabled:cursor-not-allowed hover:border-slate-300 hover:text-slate-800 transition-colors"
+        aria-label="Página siguiente"
+        className="cursor-pointer flex h-8 w-8 items-center justify-center rounded-full text-slate-400
+                   transition-colors hover:bg-slate-100 hover:text-slate-700
+                   disabled:opacity-0 disabled:pointer-events-none"
       >
-        Siguiente
-        <ChevronRight size={13} />
+        <ChevronRight size={16} />
       </button>
     </div>
   );

@@ -1,16 +1,15 @@
 "use client";
 
-import { useEffect } from "react";
-import { useParams, useRouter } from "next/navigation";
+import { useEffect, Suspense } from "react";
+import { useParams, useRouter, useSearchParams } from "next/navigation";
 import { Hash, FileBarChart, ChevronRight, Inbox, Home } from "lucide-react";
 import { useConvenioVariants } from "@/hooks/useConvenioGroupVariants";
 import { registerConvenioVisit } from "@/hooks/useConvenios";
 import { Breadcrumb } from "@/components/convenios/Breadcrumb";
+import { Pagination } from "@/components/ui/Pagination";
 import { avatarColor } from "@/components/convenios/avatarColor";
 
-// ---------------------------------------------------------------------------
-// Skeleton — mismo shell que el de convenio detalle (h-dvh + overflow-hidden)
-// ---------------------------------------------------------------------------
+const PAGE_SIZE = 12;
 
 function SkeletonBlock({ className = "" }: { className?: string }) {
   return <div className={`rounded-xl bg-slate-100 ${className}`} />;
@@ -38,9 +37,10 @@ function GrupoConvenioSkeleton() {
   );
 }
 
-export default function GrupoConvenioPage() {
+function GrupoConvenioContent() {
   const params = useParams<{ groupKey: string }>();
   const router = useRouter();
+  const searchParams = useSearchParams();
   const { variantsByGroup, companyNameByGroup, loadingGroup, fetchVariants } = useConvenioVariants();
 
   const groupKey = decodeURIComponent(params.groupKey);
@@ -49,8 +49,35 @@ export default function GrupoConvenioPage() {
   const isLoading = loadingGroup === groupKey && !variants;
   const companyLogo = variants?.[0]?.logo_url;
 
+  const page = Number(searchParams.get("page")) || 1;
+
   const totalCount = variants?.length ?? 0;
   const activeCount = variants?.filter((v) => v.status === "Activo").length ?? 0;
+
+  // Paginación del lado del cliente: el endpoint de grupo trae todas las
+  // variantes de la empresa de una sola vez (no soporta page/limit), así
+  // que acá solo cortamos el array ya cargado. Si más adelante el backend
+  // pagina esto de verdad, este es el único bloque a cambiar.
+  const totalPages = Math.max(1, Math.ceil(totalCount / PAGE_SIZE));
+  const pagedVariants = (variants ?? []).slice((page - 1) * PAGE_SIZE, page * PAGE_SIZE);
+
+  // Si el usuario llega con un ?page= que ya no existe (por ejemplo el
+  // grupo tiene menos variantes de las que pensaba), lo reacomoda a la
+  // última página válida en vez de mostrar una grilla vacía.
+  useEffect(() => {
+    if (variants && page > totalPages) {
+      const p = new URLSearchParams(searchParams.toString());
+      p.set("page", String(totalPages));
+      router.replace(`/convenios/grupo/${params.groupKey}?${p.toString()}`);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [variants, page, totalPages]);
+
+  const handlePageChange = (newPage: number) => {
+    const p = new URLSearchParams(searchParams.toString());
+    p.set("page", String(newPage));
+    router.push(`/convenios/grupo/${params.groupKey}?${p.toString()}`);
+  };
 
   useEffect(() => {
     if (groupKey) fetchVariants(groupKey);
@@ -67,20 +94,9 @@ export default function GrupoConvenioPage() {
   }
 
   return (
-    // Mismo shell que /convenios/[id]: h-dvh + overflow-hidden en la raíz, la
-    // página nunca scrollea como un todo. Header con altura natural
-    // (shrink-0) y debajo una fila flex-1 min-h-0 donde SOLO el grid de
-    // convenios scrollea internamente si no cabe.
     <div className="mx-auto flex h-dvh max-w-[1400px] flex-col gap-4 overflow-hidden p-4 font-sans">
       <Breadcrumb items={breadcrumbItems} />
 
-      {/*
-        Header card — mismas clases que el header de convenio detalle
-        (rounded-2xl border-slate-100 shadow-sm, p-3 sm:p-4), avatar
-        rounded-full en vez de rounded-xl para que coincida con
-        ConvenioHeader, y los badges reutilizan el mismo patrón de pill
-        (fondo suave + texto en mayúsculas) que ya se usa en el detalle.
-      */}
       <div className="flex shrink-0 flex-col gap-3 rounded-2xl border border-slate-100 bg-white p-3 shadow-sm sm:flex-row sm:items-center sm:justify-between sm:p-4">
         <div className="flex min-w-0 flex-1 items-center gap-3">
           <div
@@ -106,11 +122,8 @@ export default function GrupoConvenioPage() {
         </div>
       </div>
 
-      {/*
-        Grid de convenios — antes vivía en una página con scroll normal;
-        ahora es la fila flex-1 min-h-0 que scrollea sola, igual que
-        TabPanel en el detalle.
-      */}
+      {/* Grid + paginación: mismo patrón que ConveniosPage (grid flex-1,
+          Pagination fija debajo, shrink-0). */}
       <div className="min-h-0 flex-1 overflow-y-auto">
         {variants.length === 0 ? (
           <div className="flex flex-col items-center justify-center gap-3 rounded-2xl border border-dashed border-slate-200 bg-white py-20">
@@ -121,14 +134,9 @@ export default function GrupoConvenioPage() {
           </div>
         ) : (
           <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
-            {variants.map((v) => {
+            {pagedVariants.map((v) => {
               const isActive = v.status === "Activo";
 
-              // Registra la visita ANTES de navegar. Este es el punto donde
-              // se elige la variante específica dentro del grupo, así que
-              // aquí es donde debe quedar el registro (ver comentario en
-              // ConveniosPage: el caso de 1 sola variante se registra allá,
-              // el de varias variantes se registra acá).
               const handleOpen = () => {
                 registerConvenioVisit(v.contract_key);
                 router.push(`/convenios/${v.contract_key}`);
@@ -195,6 +203,18 @@ export default function GrupoConvenioPage() {
           </div>
         )}
       </div>
+
+      <div className="shrink-0">
+        <Pagination page={page} totalPages={totalPages} onPageChange={handlePageChange} />
+      </div>
     </div>
+  );
+}
+
+export default function GrupoConvenioPage() {
+  return (
+    <Suspense fallback={<GrupoConvenioSkeleton />}>
+      <GrupoConvenioContent />
+    </Suspense>
   );
 }
