@@ -408,8 +408,8 @@ export function GlobalSearch({
           className="p-3 cursor-pointer flex items-start gap-3"
         >
           <div
-            className={`w-9 h-9 rounded-lg flex items-center justify-center shrink-0 ${
-              isConvenio ? "bg-primary/10 text-primary" : "bg-green/10 text-green"
+            className={`w-9 h-9 rounded-xl flex items-center justify-center shrink-0 ${
+              isConvenio ? "bg-primary/10 text-primary" : "bg-emerald-500 text-white"
             }`}
           >
             {isConvenio ? <Building2 size={17} /> : <Stethoscope size={17} />}

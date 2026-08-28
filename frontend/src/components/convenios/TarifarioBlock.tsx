@@ -292,49 +292,71 @@ export function TarifarioBlock({
                 </tr>
               </thead>
               <tbody>
-                {items.map((item, idx) => {
-                  const isHighlighted = item.proc_code === highlightCode;
-                  const hasFixedPrice = item.final_price > 0;
+  {items.map((item, idx) => {
+    const isHighlighted = item.proc_code === highlightCode;
+    const tariffLabel = item.tariff_name || item.tariff_code || "";
+    const isISS = tariffLabel.toUpperCase().startsWith("ISS");
 
-                  return (
-                    <tr
-                      key={item.proc_code}
-                      ref={(el) => {
-                        if (idx === 0) firstRowRef.current = el;
-                        if (isHighlighted) highlightRowRef.current = el;
-                      }}
-                      className={isHighlighted ? "bg-primary/5" : "border-t border-slate-50"}
-                    >
-                      <td
-                        className={`py-2 text-navy font-medium ${
-                          isHighlighted ? "border-y-2 border-l-2 border-primary/60 rounded-l-lg pl-2" : ""
-                        }`}
-                      >
-                        {item.proc_code}
-                      </td>
-                      <td className={`py-2 text-slate-700 ${isHighlighted ? "border-y-2 border-primary/60" : ""}`}>
-                        {item.proc_name}
-                      </td>
-                      <td className={`py-2 ${isHighlighted ? "border-y-2 border-primary/60" : ""}`}>
-                        <span className="inline-block text-[10px] font-medium px-2 py-0.5 rounded-full bg-slate-50 text-slate-500">
-                          {item.tariff_name || item.tariff_code}
-                        </span>
-                      </td>
-                      <td
-                        className={`py-2 text-right font-medium ${
-                          isHighlighted ? "border-y-2 border-r-2 border-primary/60 rounded-r-lg" : ""
-                        } ${hasFixedPrice ? "text-navy" : "text-slate-500"}`}
-                      >
-                        {hasFixedPrice
-                          ? formatCOP(item.final_price)
-                          : item.percent === 100 || item.percent === 0
-                            ? "N/A"
-                            : `${(item.percent - 100).toFixed(2).replace(/\.00$/, "")}%`}
-                      </td>
-                    </tr>
-                  );
-                })}
-              </tbody>
+    // Para tarifas ISS, siempre mostramos porcentaje (nunca precio fijo),
+    // incluso si el item trae final_price > 0.
+    const hasFixedPrice = !isISS && item.final_price > 0;
+
+    // ISS: 100% = sin recargo -> "0%" (dato válido). 0% = sin dato -> N/A.
+    const percentDisplayISS =
+      item.percent === 0
+        ? "N/A"
+        : `${(item.percent - 100).toFixed(2).replace(/\.00$/, "")}%`;
+
+    // No-ISS sin precio fijo: 100% = sin recargo pero sí hay tarifa -> "$0".
+    // 0% = no configurado -> N/A. Cualquier otro valor -> porcentaje normal.
+    let nonISSDisplay: string;
+    if (item.percent === 100) {
+      nonISSDisplay = formatCOP(0);
+    } else if (item.percent === 0) {
+      nonISSDisplay = "N/A";
+    } else {
+      nonISSDisplay = `${(item.percent - 100).toFixed(2).replace(/\.00$/, "")}%`;
+    }
+
+    return (
+      <tr
+        key={item.proc_code}
+        ref={(el) => {
+          if (idx === 0) firstRowRef.current = el;
+          if (isHighlighted) highlightRowRef.current = el;
+        }}
+        className={isHighlighted ? "bg-primary/5" : "border-t border-slate-50"}
+      >
+        <td
+          className={`py-2 text-navy font-medium ${
+            isHighlighted ? "border-y-2 border-l-2 border-primary/60 rounded-l-lg pl-2" : ""
+          }`}
+        >
+          {item.proc_code}
+        </td>
+        <td className={`py-2 text-slate-700 ${isHighlighted ? "border-y-2 border-primary/60" : ""}`}>
+          {item.proc_name}
+        </td>
+        <td className={`py-2 ${isHighlighted ? "border-y-2 border-primary/60" : ""}`}>
+          <span className="inline-block text-[10px] font-medium px-2 py-0.5 rounded-full bg-slate-50 text-slate-500">
+            {item.tariff_name || item.tariff_code}
+          </span>
+        </td>
+        <td
+          className={`py-2 text-right font-medium ${
+            isHighlighted ? "border-y-2 border-r-2 border-primary/60 rounded-r-lg" : ""
+          } ${hasFixedPrice || (!isISS && item.percent === 100) ? "text-navy" : "text-slate-500"}`}
+        >
+          {hasFixedPrice
+            ? formatCOP(item.final_price)
+            : isISS
+              ? percentDisplayISS
+              : nonISSDisplay}
+        </td>
+      </tr>
+    );
+  })}
+</tbody>
             </table>
           </div>
 
