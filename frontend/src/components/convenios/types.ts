@@ -7,33 +7,24 @@ export interface ConvenioGroup {
   display_name: string;
   logo_url?: string | null;
   variant_nits: string[];
-  status: string; // "Activo" | "Inactivo" (estado CONTRACTUAL: vigente/vencido)
+  status: string;
   total_variants: number;
   modality: string;
   total_procedures: number;
-
-  /** Distingue convenio con tabla de precios propia vs programa de descuento
-   *  sobre tarifa particular (spec 0.2, 4.2). Cambia qué bloques se muestran
-   *  en la ficha y en la tarjeta. */
   tipo: "tarifario_propio" | "descuento";
-
-  /** Estado del tarifario CARGADO en el sistema — independiente de `status`.
-   *  Un convenio puede estar "Activo" contractualmente y aun así no tener
-   *  tarifario cargado todavía (spec sección 5 y modelo de datos sec. 6). */
   tarifario_status: "vigente" | "sin_tarifario" | "pendiente_digitacion";
-
-  /** Fecha de vencimiento del convenio. El rango real va de 2001 a 2026
-   *  (spec 0.3), así que nunca asumir "la tarifa más reciente" sin este dato. */
-  vigencia_fin?: string; // ISO date, ej "2026-12-31"
-
-  /** Solo si tipo === "descuento": porcentaje aplicado sobre la tarifa base. */
+  vigencia_fin?: string;
   descuento_porcentaje?: number;
-
-  /** Solo si tipo === "descuento": sobre qué tarifa aplica el porcentaje
-   *  (ej. "tarifa particular", "PBS"). */
   descuento_aplica_sobre?: string;
-}
 
+  /** Cuando hay una búsqueda activa (?q=...) y el backend encontró el match
+   *  DENTRO de un convenio/variante de este grupo (no en el nombre de la
+   *  empresa), debe devolver esto para que la card pueda mostrar un aviso
+   *  tipo "Coincidencia: {matched_variant_name}". Si el match fue por el
+   *  nombre de la empresa misma, no hace falta mandar estos campos. */
+  matched_variant_names?: string[];
+  matched_variant_key?: string;
+}
 export interface ConvenioVariant {
   nit: string;
   contract_number: string;

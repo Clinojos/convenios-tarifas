@@ -4,6 +4,7 @@ import { useState, useEffect, Suspense } from "react";
 import { useSearchParams, useRouter } from "next/navigation";
 import { Home } from "lucide-react";
 import { useConvenios, registerConvenioVisit } from "@/hooks/useConvenios";
+import { useDebouncedValue } from "@/hooks/useDebouncedValue";
 import { FilterBar } from "@/components/ui/FilterBar";
 import { Pagination } from "@/components/ui/Pagination";
 import { ConveniosGrid } from "@/components/convenios/ConveniosGrid";
@@ -23,6 +24,19 @@ function ConveniosContent() {
   const idFromUrl = searchParams.get("id");
   const [limit] = useState(12);
 
+  // Estado local del input, separado del query param: así el usuario ve lo
+  // que escribe al instante, y recién después de una pausa (debounce) se
+  // dispara la búsqueda real contra el backend (que busca en TODAS las
+  // páginas, no solo en la que está cargada).
+  const [searchInput, setSearchInput] = useState(searchQuery);
+  const debouncedSearch = useDebouncedValue(searchInput, 400);
+
+  // Si la URL cambia por fuera (ej: alguien navega con el breadcrumb a una
+  // URL guardada que ya traía un ?q=...), sincronizamos el input visible.
+  useEffect(() => {
+    setSearchInput(searchQuery);
+  }, [searchQuery]);
+
   const { convenios, loading, totalPages } = useConvenios({
     page,
     searchQuery,
@@ -33,15 +47,10 @@ function ConveniosContent() {
 
   const { setListUrl } = useBreadcrumbNav();
 
-  // Guardamos la URL completa (page/filtros) cada vez que cambia, para que
-  // si volvemos acá desde el breadcrumb en otra vista, se restaure exactamente
-  // esta misma página/filtro en vez de resetear a /convenios "pelado".
   useEffect(() => {
     setListUrl(`/convenios?${searchParams.toString()}`);
   }, [searchParams, setListUrl]);
 
-  // Breadcrumb raíz: un solo ítem, sin onClick porque ya estamos parados
-  // acá (mismo criterio que el último ítem en las otras dos vistas).
   useBreadcrumb([{ id: "home", label: "Inicio", icon: Home }]);
 
   const handlePageChange = (newPage: number) => {
@@ -59,25 +68,25 @@ function ConveniosContent() {
     router.push(`/convenios?${params.toString()}`);
   };
 
+  // Cuando el valor "asentado" del debounce cambia y difiere del que ya
+  // está en la URL, recién ahí actualizamos la URL (dispara el fetch real).
+  useEffect(() => {
+    if (debouncedSearch !== searchQuery) {
+      updateFilter("q", debouncedSearch || null);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [debouncedSearch]);
+
   const openConvenio = (convenio: ConvenioGroup) => {
     if (convenio.total_variants <= 1) {
       const contractKey = convenio.variant_keys?.[0] ?? convenio.group_key;
       registerConvenioVisit(contractKey);
       router.push(`/convenios/${contractKey}`);
     } else {
-      // "empresa" en vez de "grupo": misma restricción técnica de Next
-      // (rutas dinámicas hermanas ambiguas necesitan un segmento fijo que
-      // las distinga), pero con un nombre que sí dice algo en la URL.
       router.push(`/convenios/empresa/${convenio.group_key}`);
     }
   };
 
-  // OJO: ya NO hacemos `if (loading) return <Loading />`.
-  // El layout (breadcrumb) y el header/filtros de acá abajo se quedan
-  // siempre montados; solo la grilla cambia entre skeleton / datos / empty.
-  //
-  // Ya no hay wrapper mx-auto/max-w/p-4/h-full acá: eso lo pone
-  // app/convenios/layout.tsx una sola vez para las 3 rutas.
   return (
     <div className="flex h-full flex-col gap-4">
       <div className="flex flex-col gap-2">
@@ -88,8 +97,13 @@ function ConveniosContent() {
 
         <FilterBar
           hasActiveFilters={!!searchQuery || !!statusFilter || !!idFromUrl}
-          onClear={() => router.push("/convenios")}
+          onClear={() => {
+            setSearchInput("");
+            router.push("/convenios");
+          }}
           onFilterChange={updateFilter}
+          searchQuery={searchInput}
+          onSearchChange={setSearchInput}
           filters={{
             status: {
               value: statusFilter,
@@ -101,9 +115,6 @@ function ConveniosContent() {
             sortBy: { value: sortBy, options: [{ label: "Ordenar por nombre", value: "name" }] },
           }}
           activeFilters={[
-            ...(searchQuery
-              ? [{ label: `Búsqueda: ${searchQuery}`, key: "q", value: null, color: "bg-primary/10 text-primary-dark border-primary/20" }]
-              : []),
             ...(statusFilter
               ? [{ label: `Estado: ${statusFilter}`, key: "status", value: null, color: "bg-navy/10 text-navy border-navy/20" }]
               : []),
@@ -112,7 +123,7 @@ function ConveniosContent() {
       </div>
 
       <div className="min-h-0 flex-1 overflow-y-auto">
-        <ConveniosGrid convenios={convenios} onOpen={openConvenio} loading={loading} />
+        <ConveniosGrid convenios={convenios} onOpen={openConvenio} loading={loading} searchQuery={searchQuery} />
       </div>
 
       <div className="shrink-0">

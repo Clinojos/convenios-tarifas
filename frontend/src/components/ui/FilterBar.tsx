@@ -94,7 +94,7 @@ export function FilterBar({
               placeholder="Buscar..."
               value={searchQuery || ""}
               onChange={(e) => onSearchChange(e.target.value)}
-              className="bg-transparent outline-none w-32 text-navy placeholder:text-slate-400"
+              className="bg-transparent outline-none w-42 text-navy placeholder:text-slate-400"
             />
           </motion.div>
         )}

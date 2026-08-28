@@ -8,6 +8,15 @@ function formatCOP(valor: number) {
   return valor.toLocaleString("es-CO", { style: "currency", currency: "COP", maximumFractionDigits: 0 });
 }
 
+// Las tarifas SOAT no manejan valor en pesos: en vez de mostrar "$0" en la
+// columna Valor, mostramos "UVB {año actual}". El año se calcula en vivo,
+// así que no hay que tocar esto cada enero. El nombre de la tarifa (badge
+// de la columna "Tarifa") NO se toca, sigue mostrando "SOAT ..." tal cual
+// viene del backend.
+function getSoatValueLabel() {
+  return `UVB ${new Date().getFullYear()}`;
+}
+
 interface TarifarioBlockProps {
   contractKey: string;
   onPortfoliosChange?: (count: number) => void;
@@ -296,10 +305,12 @@ export function TarifarioBlock({
     const isHighlighted = item.proc_code === highlightCode;
     const tariffLabel = item.tariff_name || item.tariff_code || "";
     const isISS = tariffLabel.toUpperCase().startsWith("ISS");
+    const isSOAT = tariffLabel.toUpperCase().startsWith("SOAT");
 
     // Para tarifas ISS, siempre mostramos porcentaje (nunca precio fijo),
-    // incluso si el item trae final_price > 0.
-    const hasFixedPrice = !isISS && item.final_price > 0;
+    // incluso si el item trae final_price > 0. Para tarifas SOAT, nunca
+    // mostramos precio fijo ni porcentaje: siempre "UVB {año}".
+    const hasFixedPrice = !isISS && !isSOAT && item.final_price > 0;
 
     // ISS: 100% = sin recargo -> "0%" (dato válido). 0% = sin dato -> N/A.
     const percentDisplayISS =
@@ -307,8 +318,9 @@ export function TarifarioBlock({
         ? "N/A"
         : `${(item.percent - 100).toFixed(2).replace(/\.00$/, "")}%`;
 
-    // No-ISS sin precio fijo: 100% = sin recargo pero sí hay tarifa -> "$0".
-    // 0% = no configurado -> N/A. Cualquier otro valor -> porcentaje normal.
+    // No-ISS/No-SOAT sin precio fijo: 100% = sin recargo pero sí hay
+    // tarifa -> "$0". 0% = no configurado -> N/A. Cualquier otro valor ->
+    // porcentaje normal.
     let nonISSDisplay: string;
     if (item.percent === 100) {
       nonISSDisplay = formatCOP(0);
@@ -345,13 +357,21 @@ export function TarifarioBlock({
         <td
           className={`py-2 text-right font-medium ${
             isHighlighted ? "border-y-2 border-r-2 border-primary/60 rounded-r-lg" : ""
-          } ${hasFixedPrice || (!isISS && item.percent === 100) ? "text-navy" : "text-slate-500"}`}
+          } ${
+            isSOAT
+              ? "text-slate-500"
+              : hasFixedPrice || (!isISS && item.percent === 100)
+                ? "text-navy"
+                : "text-slate-500"
+          }`}
         >
-          {hasFixedPrice
-            ? formatCOP(item.final_price)
-            : isISS
-              ? percentDisplayISS
-              : nonISSDisplay}
+          {isSOAT
+            ? getSoatValueLabel()
+            : hasFixedPrice
+              ? formatCOP(item.final_price)
+              : isISS
+                ? percentDisplayISS
+                : nonISSDisplay}
         </td>
       </tr>
     );

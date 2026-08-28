@@ -139,21 +139,12 @@ export default function ConvenioDetallePage() {
     ? convenioAny.company_name ?? convenioAny.parent_company ?? convenioAny.empresa ?? convenioAny.group_name ?? null
     : null;
 
-  // El group key para /convenios/empresa/{groupKey} es el NIT de la
-  // empresa (company_nit), el campo real que trae la API de detalle.
   const groupKey: string | null = convenio?.company_nit ?? null;
 
-  // Si ya visitamos esta empresa antes (veníamos de su listado paginado),
-  // usamos esa URL exacta (con su page) en vez de la ruta pelada.
   const savedEmpresaUrl = groupKey ? getEmpresaUrl(groupKey) : undefined;
 
   const activeTabLabel = TABS.find((t) => t.id === activeTab)?.label ?? "";
 
-  // Breadcrumb: Inicio > Empresa (si aplica) > Nombre convenio > Pestaña.
-  // "Inicio" vuelve a la última URL completa de la lista principal, y
-  // "Empresa" vuelve a la última URL completa de esa empresa (con su page).
-  // Mientras `convenio` no ha cargado, se publica solo "Inicio" para no
-  // referenciar datos que todavía no existen.
   useBreadcrumb(
     convenio
       ? [
@@ -210,7 +201,9 @@ export default function ConvenioDetallePage() {
         <TabSegmented activeTab={activeTab} onChange={setActiveTab} />
       </div>
 
-      <div className="flex min-h-0 flex-1 flex-col">
+      {/* Separación visual entre el header/tabs y el contenido de abajo
+          (tarifario o info del contrato). Antes iban pegados. */}
+      <div className="mt-4 flex min-h-0 flex-1 flex-col">
         <TabPanel
           activeTab={activeTab}
           convenio={convenio}

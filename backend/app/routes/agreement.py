@@ -318,11 +318,13 @@ def list_agreement_groups(
     query = apply_search_filter(query, Agreement, q)
 
     if status:
-        # MEestado: '0' = Activo, '1' = Inactivo (invertido).
         val_estado = '0' if status == 'active' else '1'
         query = query.where(Agreement.MEestado == val_estado)
 
     agreements = session.exec(query).all()
+
+    # término normalizado para comparar contra display_name / NIT más abajo
+    q_lower = q.strip().lower() if q else None
 
     groups: dict[str, list[Agreement]] = {}
     for agreement in agreements:
@@ -330,7 +332,6 @@ def list_agreement_groups(
             nit = str(agreement.MEcntr).strip() if agreement.MEcntr is not None else ""
             key = _get_group_key(nit)
             if key is None:
-                # placeholder/vacio -> el propio MENNIT es el grupo
                 key = str(agreement.MENNIT).strip() if agreement.MENNIT is not None else nit
             groups.setdefault(key, []).append(agreement)
         except Exception as e:
@@ -345,10 +346,6 @@ def list_agreement_groups(
     procedures_map = _count_procedures(all_keys)
     meta_map = _get_meta_map(local_session, all_keys)
     company_map = _get_company_map(local_session, all_company_keys)
-    # Nombre real de la empresa (razón social) desde TERCEROS (Hosvital).
-    # SOLO se usa para el display_name de la tarjeta de EMPRESA de este
-    # endpoint. Las variantes/convenios dentro del grupo siguen usando
-    # MENOMB (ver get_agreement_group_variants más abajo, sin tocar).
     terceros_map = _get_terceros_names(session, all_company_keys)
 
     output = []
@@ -358,10 +355,6 @@ def list_agreement_groups(
             key=len,
             default=""
         )
-        # MEestado: '0' = Activo, '1' = Inactivo (invertido). El grupo se
-        # marca Activo si al menos uno de sus convenios lo está, y además
-        # exponemos cuántos exactamente están activos para que el frontend
-        # pueda mostrar mezclas (ej. "3/5 activos") en vez de un solo estado.
         active_variants = sum(1 for a in items if str(a.MEestado).strip() == '0')
         any_active = active_variants > 0
 
@@ -371,14 +364,24 @@ def list_agreement_groups(
         group_company_key = _effective_company_key(first.MEcntr, first.MENNIT)
         group_company = company_map.get(group_company_key)
 
-        # Preferimos la razón social real de TERCEROS; si no aparece,
-        # caemos al nombre de convenio más corto del grupo (comportamiento
-        # anterior), para no dejar tarjetas sin nombre.
         display_name = terceros_map.get(group_company_key) or fallback_name
+
+        # Si hubo búsqueda y el término NO aparece en el nombre de la
+        # empresa ni en su NIT, el match tuvo que venir de una variante
+        # interna (apply_search_filter ya filtró por MENOMB/MENNIT de cada
+        # Agreement). Buscamos cuál variante fue la que matcheó, para que
+        # el frontend pueda mostrar el chip "Coincidencia interna: X".
+        matched_variant_names = []
+        if q_lower:
+            for a in items:
+                variant_name = str(a.MENOMB).strip() if a.MENOMB is not None else ""
+                if q_lower in variant_name.lower() and variant_name.lower() != display_name.lower():
+                    matched_variant_names.append(variant_name)
 
         output.append({
             "group_key": key,
             "display_name": display_name,
+            "matched_variant_names": matched_variant_names,
             "status": "Activo" if any_active else "Inactivo",
             "active_variants": active_variants,
             "total_variants": len(items),

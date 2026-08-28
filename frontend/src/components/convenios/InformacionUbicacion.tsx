@@ -28,25 +28,22 @@ function Field({
 interface InformacionUbicacionProps {
   direccion: string | number | null | undefined;
   telefono: string | number | null | undefined;
-  habilitacion: string | number | null | undefined;
   vencimiento: string | number | null | undefined;
 }
 
 export function InformacionUbicacion({
   direccion,
   telefono,
-  habilitacion,
   vencimiento,
 }: InformacionUbicacionProps) {
   return (
     <SeccionCard
       icon={<MapPin size={14} className="text-primary" />}
-      titulo="Ubicación y habilitación"
+      titulo="Ubicación"
     >
       <div className="grid grid-cols-1 gap-x-4 gap-y-3 sm:grid-cols-2">
         <Field label="Dirección" value={direccion} />
         <Field label="Teléfono" value={telefono} />
-        <Field label="Habilitación" value={habilitacion} />
         <Field label="Vencimiento" value={vencimiento} />
       </div>
     </SeccionCard>
