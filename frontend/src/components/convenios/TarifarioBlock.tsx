@@ -301,82 +301,94 @@ export function TarifarioBlock({
                 </tr>
               </thead>
               <tbody>
-  {items.map((item, idx) => {
-    const isHighlighted = item.proc_code === highlightCode;
-    const tariffLabel = item.tariff_name || item.tariff_code || "";
-    const isISS = tariffLabel.toUpperCase().startsWith("ISS");
-    const isSOAT = tariffLabel.toUpperCase().startsWith("SOAT");
+                {items.map((item, idx) => {
+                  const isHighlighted = item.proc_code === highlightCode;
+                  const tariffLabel = item.tariff_name || item.tariff_code || "";
+                  const isISS = tariffLabel.toUpperCase().startsWith("ISS");
+                  const isSOAT = tariffLabel.toUpperCase().startsWith("SOAT");
 
-    // Para tarifas ISS, siempre mostramos porcentaje (nunca precio fijo),
-    // incluso si el item trae final_price > 0. Para tarifas SOAT, nunca
-    // mostramos precio fijo ni porcentaje: siempre "UVB {año}".
-    const hasFixedPrice = !isISS && !isSOAT && item.final_price > 0;
+                  // Para tarifas ISS, siempre mostramos porcentaje (nunca precio fijo),
+                  // incluso si el item trae final_price > 0. Para tarifas SOAT, nunca
+                  // mostramos precio fijo ni porcentaje: siempre "UVB {año}".
+                  const hasFixedPrice = !isISS && !isSOAT && item.final_price > 0;
 
-    // ISS: 100% = sin recargo -> "0%" (dato válido). 0% = sin dato -> N/A.
-    const percentDisplayISS =
-      item.percent === 0
-        ? "N/A"
-        : `${(item.percent - 100).toFixed(2).replace(/\.00$/, "")}%`;
+                  // ISS: 100% = sin recargo -> "0%" (dato válido). 0% = sin dato -> N/A.
+                  const percentDisplayISS =
+                    item.percent === 0
+                      ? "N/A"
+                      : `${(item.percent - 100).toFixed(2).replace(/\.00$/, "")}%`;
 
-    // No-ISS/No-SOAT sin precio fijo: 100% = sin recargo pero sí hay
-    // tarifa -> "$0". 0% = no configurado -> N/A. Cualquier otro valor ->
-    // porcentaje normal.
-    let nonISSDisplay: string;
-    if (item.percent === 100) {
-      nonISSDisplay = formatCOP(0);
-    } else if (item.percent === 0) {
-      nonISSDisplay = "N/A";
-    } else {
-      nonISSDisplay = `${(item.percent - 100).toFixed(2).replace(/\.00$/, "")}%`;
-    }
+                  // No-ISS/No-SOAT sin precio fijo: 100% = sin recargo pero sí hay
+                  // tarifa -> "$0". 0% = no configurado -> N/A. Cualquier otro valor ->
+                  // porcentaje normal.
+                  let nonISSDisplay: string;
+                  if (item.percent === 100) {
+                    nonISSDisplay = formatCOP(0);
+                  } else if (item.percent === 0) {
+                    nonISSDisplay = "N/A";
+                  } else {
+                    nonISSDisplay = `${(item.percent - 100).toFixed(2).replace(/\.00$/, "")}%`;
+                  }
 
-    return (
-      <tr
-        key={item.proc_code}
-        ref={(el) => {
-          if (idx === 0) firstRowRef.current = el;
-          if (isHighlighted) highlightRowRef.current = el;
-        }}
-        className={isHighlighted ? "bg-primary/5" : "border-t border-slate-50"}
-      >
-        <td
-          className={`py-2 text-navy font-medium ${
-            isHighlighted ? "border-y-2 border-l-2 border-primary/60 rounded-l-lg pl-2" : ""
-          }`}
-        >
-          {item.proc_code}
-        </td>
-        <td className={`py-2 text-slate-700 ${isHighlighted ? "border-y-2 border-primary/60" : ""}`}>
-          {item.proc_name}
-        </td>
-        <td className={`py-2 ${isHighlighted ? "border-y-2 border-primary/60" : ""}`}>
-          <span className="inline-block text-[10px] font-medium px-2 py-0.5 rounded-full bg-slate-50 text-slate-500">
-            {item.tariff_name || item.tariff_code}
-          </span>
-        </td>
-        <td
-          className={`py-2 text-right font-medium ${
-            isHighlighted ? "border-y-2 border-r-2 border-primary/60 rounded-r-lg" : ""
-          } ${
-            isSOAT
-              ? "text-slate-500"
-              : hasFixedPrice || (!isISS && item.percent === 100)
-                ? "text-navy"
-                : "text-slate-500"
-          }`}
-        >
-          {isSOAT
-            ? getSoatValueLabel()
-            : hasFixedPrice
-              ? formatCOP(item.final_price)
-              : isISS
-                ? percentDisplayISS
-                : nonISSDisplay}
-        </td>
-      </tr>
-    );
-  })}
-</tbody>
+                  return (
+                    <tr
+                      key={item.proc_code}
+                      ref={(el) => {
+                        if (idx === 0) firstRowRef.current = el;
+                        if (isHighlighted) highlightRowRef.current = el;
+                      }}
+                      className={isHighlighted ? "bg-primary/5" : "border-t border-slate-50"}
+                    >
+                      <td
+                        className={`py-2 text-navy font-medium ${
+                          isHighlighted ? "border-y-2 border-l-2 border-primary/60 rounded-l-lg pl-2" : ""
+                        }`}
+                      >
+                        {item.proc_code}
+                      </td>
+                      <td className={`py-2 text-slate-700 ${isHighlighted ? "border-y-2 border-primary/60" : ""}`}>
+                        {item.proc_name}
+                      </td>
+                      <td className={`py-2 ${isHighlighted ? "border-y-2 border-primary/60" : ""}`}>
+                        <span className="inline-block text-[10px] font-medium px-2 py-0.5 rounded-full bg-slate-50 text-slate-500">
+                          {item.tariff_name || item.tariff_code}
+                        </span>
+                      </td>
+                      {/* Columna Valor: SOAT usa un contenedor flex + justify-end en vez
+                          de depender de text-right en el <td>, porque un <span>
+                          inline-block (el badge) no siempre queda perfectamente al
+                          filo derecho igual que el texto plano de las demás filas.
+                          Con flex justify-end el badge y el precio quedan exactamente
+                          en el mismo eje vertical derecho, fila tras fila. */}
+                      <td
+                        className={`py-2 font-medium ${
+                          isHighlighted ? "border-y-2 border-r-2 border-primary/60 rounded-r-lg" : ""
+                        } ${
+                          isSOAT
+                            ? "text-slate-500"
+                            : hasFixedPrice || (!isISS && item.percent === 100)
+                              ? "text-navy"
+                              : "text-slate-500"
+                        }`}
+                      >
+                        <div className="flex items-center justify-end">
+                          {isSOAT ? (
+                            <span className="inline-block text-[10px] font-medium px-2 py-0.5 rounded-full bg-slate-50 text-slate-500">
+                              {getSoatValueLabel()}
+                            </span>
+                          ) : hasFixedPrice ? (
+                            formatCOP(item.final_price)
+                          ) : isISS ? (
+                            percentDisplayISS
+                          ) : (
+                            nonISSDisplay
+                          )}
+                        </div>
+                      </td>
+                    </tr>
+                  );
+                })}
+              </tbody>
             </table>
           </div>
 

@@ -17,8 +17,8 @@ import { COOKIE_NAME } from "@/config/auth";
 const navItems = [
   { label: "Inicio", href: "/dashboard", icon: LayoutDashboard, requiredPermission: "" },
   { label: "Convenios", href: "/convenios", icon: Building2, requiredPermission: "agreement:view" },
-  /*{ label: "Procedimientos", href: "/procedures", icon: Stethoscope, requiredPermission: "procedures:view" },
-  { label: "Tarifas y Servicios", href: "/tariffs", icon: FileText, requiredPermission: "tariffs:view" },*/
+  { label: "Procedimientos", href: "/procedimientos", icon: Stethoscope, requiredPermission: "procedures:view" },
+  /*{ label: "Tarifas y Servicios", href: "/tariffs", icon: FileText, requiredPermission: "tariffs:view" },*/
   { label: "Roles y Permisos", href: "/roles", icon: ShieldCheck, requiredPermission: "roles:view" },
   { label: "Usuarios", href: "/users", icon: Users, requiredPermission: "users:view" },
 ];
