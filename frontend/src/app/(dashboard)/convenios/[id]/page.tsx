@@ -16,7 +16,7 @@ import { ConvenioDetalleSkeleton } from "@/components/convenios/skeletons/Conven
 
 import { useConvenioDetail } from "@/hooks/useConvenioDetail";
 import { parseObservaciones } from "@/lib/parseObservaciones";
-import { useBreadcrumb, useBreadcrumbNav } from "../BreadcrumbContext";
+import { useBreadcrumb, useBreadcrumbNav } from "../../../../components/breadcrumb/BreadcrumbContext";
 
 // ---------------------------------------------------------------------------
 // Pestañas

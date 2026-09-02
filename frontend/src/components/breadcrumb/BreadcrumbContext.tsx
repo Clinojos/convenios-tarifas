@@ -27,8 +27,15 @@ export function BreadcrumbProvider({ children }: { children: ReactNode }) {
   const [items, setItems] = useState<BreadcrumbItem[]>([]);
   const setBreadcrumb = useCallback((newItems: BreadcrumbItem[]) => setItems(newItems), []);
 
-  // Última URL completa (con page/filtros) vista en /convenios
-  const [listUrl, setListUrl] = useState("/convenios");
+  // Última URL completa (con page/filtros) vista en la lista de la sección
+  // (convenios, procedimientos, etc). Vacío por defecto: cada page.tsx hace
+  // su propio fallback a la ruta base de su sección cuando todavía no hay
+  // nada guardado (ej: se entró directo al detalle desde el buscador
+  // global, sin pasar antes por el listado). Antes esto arrancaba
+  // hardcodeado en "/convenios", lo que hacía que "Inicio" en el detalle
+  // de un procedimiento (con listUrl aún sin setear) te mandara a
+  // convenios por error.
+  const [listUrl, setListUrl] = useState("");
 
   // Última URL completa por empresa visitada (cada una tiene su propia
   // paginación en /convenios/empresa/[groupKey])

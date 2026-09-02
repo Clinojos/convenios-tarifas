@@ -48,6 +48,13 @@ export function TarifarioBlock({
   const [activePortfolio, setActivePortfolio] = useState<string | null>(null);
   const [search, setSearch] = useState("");
 
+  // Cubre la ventana del debounce de búsqueda (ver efecto 3): sin esto,
+  // entre que el usuario deja de escribir y el fetch realmente sale disparado
+  // (350ms después), loadingItems sigue en false y se alcanza a ver el
+  // mensaje de "sin procedimientos" con los items viejos, antes de que la
+  // búsqueda nueva ni siquiera se haya lanzado.
+  const [isDebouncing, setIsDebouncing] = useState(false);
+
   // Filas por página: arranca en un valor por defecto y se recalcula solo
   // según el alto real disponible + el alto real de una fila renderizada.
   const [rowsPerPage, setRowsPerPage] = useState(DEFAULT_ROWS);
@@ -87,57 +94,57 @@ export function TarifarioBlock({
   // Recalcula cuando el contenedor cambia de tamaño (resize de ventana,
   // sidebar que se abre/cierra, cambio de pestaña del layout, etc).
   useLayoutEffect(() => {
-  const wrapper = tableWrapperRef.current;
-  if (!wrapper) return;
+    const wrapper = tableWrapperRef.current;
+    if (!wrapper) return;
 
-  let frame: number;
-  let debounceTimeout: ReturnType<typeof setTimeout>;
-  const scheduleRecompute = () => {
-    clearTimeout(debounceTimeout);
-    debounceTimeout = setTimeout(() => {
+    let frame: number;
+    let debounceTimeout: ReturnType<typeof setTimeout>;
+    const scheduleRecompute = () => {
+      clearTimeout(debounceTimeout);
+      debounceTimeout = setTimeout(() => {
+        cancelAnimationFrame(frame);
+        frame = requestAnimationFrame(recomputeRows);
+      }, 120);
+    };
+
+    // Cambios de tamaño del contenedor (sidebar que colapsa, layout que
+    // cambia, etc.)
+    const resizeObserver = new ResizeObserver(scheduleRecompute);
+    resizeObserver.observe(wrapper);
+
+    // Resize normal de ventana (algunos navegadores SÍ disparan esto en zoom,
+    // aunque no el ResizeObserver del contenedor).
+    window.addEventListener("resize", scheduleRecompute);
+
+    // visualViewport: en móviles y en varios navegadores de escritorio, esto
+    // reacciona a zoom cuando window.resize no lo hace.
+    window.visualViewport?.addEventListener("resize", scheduleRecompute);
+
+    // devicePixelRatio cambia exactamente cuando el usuario hace zoom
+    // (Ctrl +/-), incluso si ningún elemento cambia su tamaño en px CSS.
+    // matchMedia con ese ratio como query es el truco estándar para
+    // "escuchar" cambios de zoom: cada vez que dispara, nos volvemos a
+    // suscribir con el nuevo ratio para seguir escuchando el próximo cambio.
+    let mql: MediaQueryList | null = null;
+    const watchZoom = () => {
+      mql?.removeEventListener("change", handleZoomChange);
+      mql = window.matchMedia(`(resolution: ${window.devicePixelRatio}dppx)`);
+      mql.addEventListener("change", handleZoomChange);
+    };
+    const handleZoomChange = () => {
+      scheduleRecompute();
+      watchZoom(); // re-suscribirse con el nuevo ratio
+    };
+    watchZoom();
+
+    return () => {
       cancelAnimationFrame(frame);
-      frame = requestAnimationFrame(recomputeRows);
-    }, 120);
-  };
-
-  // Cambios de tamaño del contenedor (sidebar que colapsa, layout que
-  // cambia, etc.)
-  const resizeObserver = new ResizeObserver(scheduleRecompute);
-  resizeObserver.observe(wrapper);
-
-  // Resize normal de ventana (algunos navegadores SÍ disparan esto en zoom,
-  // aunque no el ResizeObserver del contenedor).
-  window.addEventListener("resize", scheduleRecompute);
-
-  // visualViewport: en móviles y en varios navegadores de escritorio, esto
-  // reacciona a zoom cuando window.resize no lo hace.
-  window.visualViewport?.addEventListener("resize", scheduleRecompute);
-
-  // devicePixelRatio cambia exactamente cuando el usuario hace zoom
-  // (Ctrl +/-), incluso si ningún elemento cambia su tamaño en px CSS.
-  // matchMedia con ese ratio como query es el truco estándar para
-  // "escuchar" cambios de zoom: cada vez que dispara, nos volvemos a
-  // suscribir con el nuevo ratio para seguir escuchando el próximo cambio.
-  let mql: MediaQueryList | null = null;
-  const watchZoom = () => {
-    mql?.removeEventListener("change", handleZoomChange);
-    mql = window.matchMedia(`(resolution: ${window.devicePixelRatio}dppx)`);
-    mql.addEventListener("change", handleZoomChange);
-  };
-  const handleZoomChange = () => {
-    scheduleRecompute();
-    watchZoom(); // re-suscribirse con el nuevo ratio
-  };
-  watchZoom();
-
-  return () => {
-    cancelAnimationFrame(frame);
-    resizeObserver.disconnect();
-    window.removeEventListener("resize", scheduleRecompute);
-    window.visualViewport?.removeEventListener("resize", scheduleRecompute);
-    mql?.removeEventListener("change", handleZoomChange);
-  };
-}, [recomputeRows]);
+      resizeObserver.disconnect();
+      window.removeEventListener("resize", scheduleRecompute);
+      window.visualViewport?.removeEventListener("resize", scheduleRecompute);
+      mql?.removeEventListener("change", handleZoomChange);
+    };
+  }, [recomputeRows]);
 
   // Recalcula también apenas hay filas reales para medir (la primera vez
   // que llegan items, la altura de fila pasa de "estimada" a "real").
@@ -180,13 +187,18 @@ export function TarifarioBlock({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [activePortfolio]);
 
-  // 3. Búsqueda con debounce simple, siempre vuelve a la página 1
+  // 3. Búsqueda con debounce simple, siempre vuelve a la página 1.
+  // Mientras el timeout está corriendo marcamos isDebouncing en true, para
+  // que el skeleton se mantenga visible y no se alcance a ver el estado
+  // "sin procedimientos" con los items de la búsqueda anterior.
   useEffect(() => {
     if (!activePortfolio) return;
-    const timeout = setTimeout(
-      () => fetchItems(activePortfolio, search || undefined, 1, rowsPerPage),
-      350,
-    );
+    setIsDebouncing(true);
+    const timeout = setTimeout(() => {
+      Promise.resolve(fetchItems(activePortfolio, search || undefined, 1, rowsPerPage)).finally(() =>
+        setIsDebouncing(false),
+      );
+    }, 350);
     return () => clearTimeout(timeout);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [search]);
@@ -211,6 +223,11 @@ export function TarifarioBlock({
   }, [items, highlightCode]);
 
   const totalPages = Math.max(1, Math.ceil(total / rowsPerPage));
+
+  // Loading combinado: portafolios, items en vuelo, o debounce de búsqueda
+  // corriendo. Cualquiera de los tres debe mostrar skeleton, nunca el
+  // estado vacío.
+  const isLoading = loadingPortfolios || loadingItems || isDebouncing;
 
   const goToPage = (newPage: number) => {
     if (!activePortfolio) return;
@@ -277,7 +294,7 @@ export function TarifarioBlock({
 
       {error && <p className="mt-3 text-[12px] text-red-500 shrink-0">{error}</p>}
 
-      {loadingPortfolios || loadingItems ? (
+      {isLoading ? (
         <div className="mt-3 space-y-2 flex-1 min-h-0 overflow-hidden">
           {Array.from({ length: rowsPerPage }).map((_, i) => (
             <div key={i} className="h-8 bg-slate-50 rounded animate-pulse" />
@@ -418,7 +435,11 @@ export function TarifarioBlock({
         </>
       ) : (
         <div className="mt-6 py-10 text-center flex-1 min-h-0">
-          <p className="text-[13px] font-semibold text-navy">Sin tarifario cargado en este portafolio</p>
+          <p className="text-[13px] font-semibold text-navy">
+            {search.trim()
+              ? "Sin procedimientos encontrados para esta búsqueda"
+              : "Sin procedimientos encontrados para este portafolio"}
+          </p>
         </div>
       )}
     </div>

@@ -1,7 +1,7 @@
 "use client";
 
-import { Breadcrumb } from "@/components/convenios/Breadcrumb";
-import { useBreadcrumbValue } from "./BreadcrumbContext";
+import { Breadcrumb } from "@/components/breadcrumb/Breadcrumb";
+import { useBreadcrumbValue } from "@/components/breadcrumb/BreadcrumbContext";
 
 // Vive en el layout: esta instancia nunca se desmonta al navegar entre
 // /convenios, /convenios/[id] y /convenios/empresa/[groupKey].

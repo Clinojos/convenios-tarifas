@@ -9,7 +9,7 @@ import { FilterBar } from "@/components/ui/FilterBar";
 import { Pagination } from "@/components/ui/Pagination";
 import { ConveniosGrid } from "@/components/convenios/ConveniosGrid";
 import type { ConvenioGroup } from "@/components/convenios/types";
-import { useBreadcrumb, useBreadcrumbNav } from "./BreadcrumbContext";
+import { useBreadcrumb, useBreadcrumbNav } from "@/components/breadcrumb/BreadcrumbContext";
 
 import Loading from "./loading";
 

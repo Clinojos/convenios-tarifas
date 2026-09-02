@@ -1,5 +1,5 @@
-import { BreadcrumbProvider } from "./BreadcrumbContext";
-import { BreadcrumbSlot } from "./BreadcrumbSlot";
+import { BreadcrumbProvider } from "@/components/breadcrumb/BreadcrumbContext";
+import { BreadcrumbSlot } from "@/components/breadcrumb/BreadcrumbSlot";
 
 // Wrapper único para las 3 rutas de convenios. Antes cada page.tsx repetía
 // "mx-auto max-w-[1400px] flex flex-col gap-4 overflow-hidden p-4 font-sans"

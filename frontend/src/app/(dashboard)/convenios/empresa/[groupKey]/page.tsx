@@ -10,7 +10,7 @@ import { EmpresaHeaderCard } from "@/components/convenios/EmpresaHeaderCard";
 import { CompanyCard } from "@/components/convenios/CompanyCard";
 import { EmptyState } from "@/components/convenios/EmptyState";
 import { EmpresaConveniosSkeleton } from "@/components/convenios/skeletons/ConveniosSkeletons";
-import { useBreadcrumb, useBreadcrumbNav } from "../../BreadcrumbContext";
+import { useBreadcrumb, useBreadcrumbNav } from "../../../../../components/breadcrumb/BreadcrumbContext";
 
 const PAGE_SIZE = 12;
 
