@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState, useRef, useCallback, useLayoutEffect } from "react";
+import { useEffect, useState, useRef, useCallback, useLayoutEffect, Suspense } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { Search, Home, ChevronLeft, ChevronRight } from "lucide-react";
 import { API_BASE_URL } from "@/config/api";
@@ -17,12 +17,10 @@ type ProcedureRow = {
 const MIN_ROWS = 5;
 const DEFAULT_ROWS = 10;
 
-export default function ProceduresListPage() {
+function ProceduresListContent() {
   const router = useRouter();
   const searchParams = useSearchParams();
 
-  // La página ahora vive en la URL (?page=N), no solo en estado local.
-  // Así "Inicio" puede volver exactamente a donde estabas.
   const page = Number(searchParams.get("page")) || 1;
 
   const [rows, setRows] = useState<ProcedureRow[]>([]);
@@ -47,15 +45,10 @@ export default function ProceduresListPage() {
       id: "home",
       label: "Inicio",
       icon: Home,
-      // Si ya venimos con un listUrl guardado (ej. saliste al detalle y
-      // volviste), lo usamos; si no, cae en /procedimientos por defecto.
       onClick: () => router.push(listUrl || "/procedimientos"),
     },
   ]);
 
-  // Cada vez que cambian página o búsqueda en la URL, guardamos la URL
-  // completa como "listUrl" — así el breadcrumb desde el detalle sabe
-  // exactamente a qué página volver.
   useEffect(() => {
     setListUrl(`/procedimientos?${searchParams.toString()}`);
   }, [searchParams, setListUrl]);
@@ -74,9 +67,6 @@ export default function ProceduresListPage() {
     router.push(`/procedimientos?${params.toString()}`);
   }
 
-  // ---------------------------------------------------------------------
-  // Cálculo de filas por página según el espacio disponible
-  // ---------------------------------------------------------------------
   const recomputeRows = useCallback(() => {
     const wrapper = tableWrapperRef.current;
     if (!wrapper) return;
@@ -138,9 +128,6 @@ export default function ProceduresListPage() {
     recomputeRows();
   }, [rows, recomputeRows]);
 
-  // ---------------------------------------------------------------------
-  // Fetch
-  // ---------------------------------------------------------------------
   function fetchProcedures(targetPage: number, search: string, limit: number) {
     setLoading(true);
     setError(false);
@@ -177,8 +164,6 @@ export default function ProceduresListPage() {
       .finally(() => setLoading(false));
   }
 
-  // Cuando el término "asentado" cambia y difiere de la URL, actualizamos
-  // la URL (y volvemos a página 1).
   useEffect(() => {
     if (debouncedSearch !== (searchParams.get("q") || "")) {
       setSearchInUrl(debouncedSearch);
@@ -186,7 +171,6 @@ export default function ProceduresListPage() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [debouncedSearch]);
 
-  // Fetch principal: reacciona a page/q de la URL y a rowsPerPage.
   useEffect(() => {
     fetchProcedures(page, searchParams.get("q") || "", rowsPerPage);
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -297,5 +281,13 @@ export default function ProceduresListPage() {
         )}
       </div>
     </div>
+  );
+}
+
+export default function ProceduresListPage() {
+  return (
+    <Suspense fallback={null}>
+      <ProceduresListContent />
+    </Suspense>
   );
 }
