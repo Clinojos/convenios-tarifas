@@ -27,7 +27,7 @@ def _trimmed(col):
     return func.rtrim(func.ltrim(col))
 
 
-@router.get("/")
+@router.get("")
 def list_procedures(
     session: Session = Depends(get_session_hosvital),
     page: int = 1,

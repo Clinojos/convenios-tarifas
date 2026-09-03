@@ -17,6 +17,15 @@ type ProcedureRow = {
 const MIN_ROWS = 5;
 const DEFAULT_ROWS = 10;
 
+// Alturas estimadas por fila/encabezado según las clases de Tailwind usadas
+// abajo (text-[12px] + py-2 en <td>, texto uppercase text-[10px] + pb-2 en
+// <thead>). Usamos constantes fijas en vez de medir la primera fila real
+// del <table>, para poder calcular rowsPerPage ANTES de tener datos y así
+// hacer un solo fetch inicial con el límite correcto (en vez de pedir con
+// DEFAULT_ROWS y luego repetir con el valor real una vez medido).
+const THEAD_HEIGHT_ESTIMATE = 28;
+const ROW_HEIGHT_ESTIMATE = 33;
+
 function ProceduresListContent() {
   const router = useRouter();
   const searchParams = useSearchParams();
@@ -33,10 +42,13 @@ function ProceduresListContent() {
   const isDebouncing = searchInput !== debouncedSearch;
 
   const [rowsPerPage, setRowsPerPage] = useState(DEFAULT_ROWS);
+  // Se vuelve true en cuanto medimos el layout por primera vez. El fetch
+  // inicial espera a esto para no pedir datos dos veces (una con
+  // DEFAULT_ROWS "a ciegas" y otra con el valor real ya medido).
+  const [rowsReady, setRowsReady] = useState(false);
 
   const tableWrapperRef = useRef<HTMLDivElement | null>(null);
   const theadRef = useRef<HTMLTableSectionElement | null>(null);
-  const firstRowRef = useRef<HTMLTableRowElement | null>(null);
 
   const { setListUrl, listUrl } = useBreadcrumbNav();
 
@@ -72,20 +84,27 @@ function ProceduresListContent() {
     if (!wrapper) return;
 
     const containerHeight = wrapper.clientHeight;
-    const theadHeight = theadRef.current?.getBoundingClientRect().height ?? 28;
-    const rowHeight = firstRowRef.current?.getBoundingClientRect().height ?? 33;
+    // Antes de tener datos usamos el thead estimado; una vez el thead real
+    // está en el DOM (con datos o con skeleton, ambos lo montan) tomamos su
+    // altura real si está disponible.
+    const theadHeight = theadRef.current?.getBoundingClientRect().height || THEAD_HEIGHT_ESTIMATE;
 
     const available = containerHeight - theadHeight;
-    if (available <= 0 || rowHeight <= 0) return;
+    if (available <= 0) return;
 
-    const nextRows = Math.max(MIN_ROWS, Math.floor(available / rowHeight));
+    const nextRows = Math.max(MIN_ROWS, Math.floor(available / ROW_HEIGHT_ESTIMATE));
 
     setRowsPerPage((prev) => (prev === nextRows ? prev : nextRows));
+    setRowsReady(true);
   }, []);
 
   useLayoutEffect(() => {
     const wrapper = tableWrapperRef.current;
     if (!wrapper) return;
+
+    // Medición inicial inmediata (sin debounce) para que el primer fetch
+    // ya salga con el rowsPerPage correcto.
+    recomputeRows();
 
     let frame: number;
     let debounceTimeout: ReturnType<typeof setTimeout>;
@@ -123,10 +142,6 @@ function ProceduresListContent() {
       mql?.removeEventListener("change", handleZoomChange);
     };
   }, [recomputeRows]);
-
-  useLayoutEffect(() => {
-    recomputeRows();
-  }, [rows, recomputeRows]);
 
   function fetchProcedures(targetPage: number, search: string, limit: number) {
     setLoading(true);
@@ -172,12 +187,15 @@ function ProceduresListContent() {
   }, [debouncedSearch]);
 
   useEffect(() => {
+    // Espera a la primera medición de layout para no disparar un fetch
+    // "a ciegas" con DEFAULT_ROWS y luego repetirlo con el valor real.
+    if (!rowsReady) return;
     fetchProcedures(page, searchParams.get("q") || "", rowsPerPage);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [page, searchParams, rowsPerPage]);
+  }, [page, searchParams, rowsPerPage, rowsReady]);
 
   const totalPages = Math.max(1, Math.ceil(total / rowsPerPage));
-  const isLoading = loading || isDebouncing;
+  const isLoading = loading || isDebouncing || !rowsReady;
 
   const goToPage = (newPage: number) => {
     if (newPage < 1 || newPage > totalPages) return;
@@ -208,75 +226,75 @@ function ProceduresListContent() {
 
         {error && <p className="mt-3 text-[12px] text-red-500 shrink-0">Error al cargar los procedimientos.</p>}
 
-        {isLoading ? (
-          <div className="mt-3 space-y-2 flex-1 min-h-0 overflow-hidden">
-            {Array.from({ length: rowsPerPage }).map((_, i) => (
-              <div key={i} className="h-8 bg-slate-50 rounded animate-pulse" />
-            ))}
-          </div>
-        ) : rows.length > 0 ? (
-          <>
-            <div ref={tableWrapperRef} className="mt-3 flex-1 min-h-0 overflow-x-auto overflow-y-hidden">
-              <table className="w-full text-[12px] border-separate border-spacing-0">
-                <thead ref={theadRef}>
-                  <tr className="text-left text-slate-400 text-[10px] uppercase tracking-wide">
-                    <th className="font-medium pb-2 w-28">Código CUPS</th>
-                    <th className="font-medium pb-2">Nombre del procedimiento</th>
-                    <th className="font-medium pb-2 text-right w-24">Convenios</th>
+        {/* El wrapper medible ahora está SIEMPRE montado (loading o no), para
+            que el ResizeObserver pueda medirlo antes del primer fetch. Lo
+            que cambia adentro es solo el contenido (skeleton vs tabla). */}
+        <div ref={tableWrapperRef} className="mt-3 flex-1 min-h-0 overflow-x-auto overflow-y-hidden">
+          {isLoading ? (
+            <div className="space-y-2">
+              {Array.from({ length: rowsPerPage }).map((_, i) => (
+                <div key={i} className="h-8 bg-slate-50 rounded animate-pulse" />
+              ))}
+            </div>
+          ) : rows.length > 0 ? (
+            <table className="w-full text-[12px] border-separate border-spacing-0">
+              <thead ref={theadRef}>
+                <tr className="text-left text-slate-400 text-[10px] uppercase tracking-wide">
+                  <th className="font-medium pb-2 w-28">Código CUPS</th>
+                  <th className="font-medium pb-2">Nombre del procedimiento</th>
+                  <th className="font-medium pb-2 text-right w-24">Convenios</th>
+                </tr>
+              </thead>
+              <tbody>
+                {rows.map((proc) => (
+                  <tr
+                    key={proc.code}
+                    onClick={() => router.push(`/procedimientos/${proc.code}`)}
+                    className="cursor-pointer border-t border-slate-50 hover:bg-slate-50 transition-colors"
+                  >
+                    <td className="py-2 text-navy font-medium">{proc.code}</td>
+                    <td className="py-2 text-slate-700 truncate max-w-0">{proc.name}</td>
+                    <td className="py-2 text-right text-slate-500 font-medium">
+                      {proc.total_offers ?? "—"}
+                    </td>
                   </tr>
-                </thead>
-                <tbody>
-                  {rows.map((proc, idx) => (
-                    <tr
-                      key={proc.code}
-                      ref={(el) => {
-                        if (idx === 0) firstRowRef.current = el;
-                      }}
-                      onClick={() => router.push(`/procedimientos/${proc.code}`)}
-                      className="cursor-pointer border-t border-slate-50 hover:bg-slate-50 transition-colors"
-                    >
-                      <td className="py-2 text-navy font-medium">{proc.code}</td>
-                      <td className="py-2 text-slate-700 truncate max-w-0">{proc.name}</td>
-                      <td className="py-2 text-right text-slate-500 font-medium">
-                        {proc.total_offers ?? "—"}
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
-
-            <div className="mt-4 flex items-center justify-between shrink-0">
-              <p className="text-[11px] text-slate-400">
-                {total} procedimiento{total !== 1 ? "s" : ""} · página {page} de {totalPages}
+                ))}
+              </tbody>
+            </table>
+          ) : (
+            <div className="py-10 text-center">
+              <p className="text-[13px] font-semibold text-navy">
+                {searchInput.trim()
+                  ? "Sin procedimientos encontrados para esta búsqueda"
+                  : "No hay procedimientos registrados"}
               </p>
-              <div className="flex items-center gap-1.5">
-                <button
-                  onClick={() => goToPage(page - 1)}
-                  disabled={page <= 1 || loading}
-                  className="cursor-pointer flex items-center gap-1 text-[11px] font-medium px-3 py-1.5 rounded-lg border border-slate-200 text-slate-600 disabled:opacity-40 disabled:cursor-not-allowed hover:border-slate-300 hover:text-slate-800 transition-colors"
-                >
-                  <ChevronLeft size={13} />
-                  Anterior
-                </button>
-                <button
-                  onClick={() => goToPage(page + 1)}
-                  disabled={page >= totalPages || loading}
-                  className="cursor-pointer flex items-center gap-1 text-[11px] font-medium px-3 py-1.5 rounded-lg border border-slate-200 text-slate-600 disabled:opacity-40 disabled:cursor-not-allowed hover:border-slate-300 hover:text-slate-800 transition-colors"
-                >
-                  Siguiente
-                  <ChevronRight size={13} />
-                </button>
-              </div>
             </div>
-          </>
-        ) : (
-          <div className="mt-6 py-10 text-center flex-1 min-h-0">
-            <p className="text-[13px] font-semibold text-navy">
-              {searchInput.trim()
-                ? "Sin procedimientos encontrados para esta búsqueda"
-                : "No hay procedimientos registrados"}
+          )}
+        </div>
+
+        {!isLoading && rows.length > 0 && (
+          <div className="mt-4 flex items-center justify-between shrink-0">
+            <p className="text-[11px] text-slate-400">
+              {total} procedimiento{total !== 1 ? "s" : ""} · página {page} de {totalPages}
             </p>
+            <div className="flex items-center gap-1.5">
+              <button
+                onClick={() => goToPage(page - 1)}
+                disabled={page <= 1 || loading}
+                className="cursor-pointer flex items-center gap-1 text-[11px] font-medium px-3 py-1.5 rounded-lg border border-slate-200 text-slate-600 disabled:opacity-40 disabled:cursor-not-allowed hover:border-slate-300 hover:text-slate-800 transition-colors"
+              >
+                <ChevronLeft size={13} />
+                Anterior
+              </button>
+              <button
+                onClick={() => goToPage(page + 1)}
+                disabled={page >= totalPages || loading}
+                className="cursor-pointer flex items-center gap-1 text-[11px] font-medium px-3 py-1.5 rounded-lg border border-slate-200 text-slate-600 disabled:opacity-40 disabled:cursor-not-allowed hover:border-slate-300 hover:text-slate-800 transition-colors"
+              >
+                Siguiente
+                <ChevronRight size={13} />
+              </button>
+            </div>
           </div>
         )}
       </div>

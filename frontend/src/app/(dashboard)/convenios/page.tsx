@@ -37,7 +37,10 @@ function ConveniosContent() {
     setSearchInput(searchQuery);
   }, [searchQuery]);
 
-  const { convenios, loading, totalPages } = useConvenios({
+  // `loading` (primera carga) va a la grilla para decidir skeletons.
+  // `isFetching` (cualquier refetch) va a la grilla para el dimming, y no
+  // dispara nunca el fallback de <Suspense> ni desmonta nada.
+  const { convenios, loading, isFetching, totalPages } = useConvenios({
     page,
     searchQuery,
     status: statusFilter,
@@ -123,7 +126,13 @@ function ConveniosContent() {
       </div>
 
       <div className="min-h-0 flex-1 overflow-y-auto">
-        <ConveniosGrid convenios={convenios} onOpen={openConvenio} loading={loading} searchQuery={searchQuery} />
+        <ConveniosGrid
+          convenios={convenios}
+          onOpen={openConvenio}
+          loading={loading}
+          isFetching={isFetching}
+          searchQuery={searchQuery}
+        />
       </div>
 
       <div className="shrink-0">

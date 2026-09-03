@@ -37,7 +37,6 @@ async def validation_exception_handler(request, exc):
 @app.on_event("startup")
 def on_startup():
     init_db()  # Esto crea tu archivo .db en la carpeta Database
-    print("API iniciada y base de datos local verificada.")
 
 # 2. Registrar rutas
 app.include_router(auth.router)

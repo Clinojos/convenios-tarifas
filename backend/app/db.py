@@ -15,6 +15,10 @@ db_password = os.getenv("DB_PASSWORD")
 db_server = os.getenv("DB_HOST")
 db_name = os.getenv("DB_NAME")
 
+# Controla el echo de SQLAlchemy por ambiente en vez de dejarlo fijo.
+# En .env pon SQL_ECHO=true solo cuando necesites depurar queries.
+SQL_ECHO = os.getenv("SQL_ECHO", "false").lower() == "true"
+
 # Validación estricta para asegurar que el .env se cargó
 if not all([db_user, db_password, db_server, db_name]):
     raise Exception(
@@ -31,7 +35,7 @@ params = urllib.parse.quote_plus(
     "TrustServerCertificate=yes;"
 )
 DATABASE_URL_HOSVITAL = f"mssql+pyodbc:///?odbc_connect={params}"
-engine_hosvital = create_engine(DATABASE_URL_HOSVITAL, echo=True)
+engine_hosvital = create_engine(DATABASE_URL_HOSVITAL, echo=SQL_ECHO)
 
 # 2. Configuración de SQLite (Local)
 # Se asegura que la carpeta Database exista
@@ -39,7 +43,7 @@ if not os.path.exists("./Database"):
     os.makedirs("./Database")
 
 SQLITE_URL = "sqlite:///./Database/app_control.db"
-engine_local = create_engine(SQLITE_URL, connect_args={"check_same_thread": False})
+engine_local = create_engine(SQLITE_URL, connect_args={"check_same_thread": False}, echo=SQL_ECHO)
 
 def init_db():
     local_metadata.create_all(engine_local)

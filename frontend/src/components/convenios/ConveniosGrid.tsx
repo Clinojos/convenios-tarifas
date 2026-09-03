@@ -9,6 +9,8 @@ interface ConveniosGridProps {
   convenios: ConvenioGroup[];
   onOpen: (convenio: ConvenioGroup) => void;
   loading?: boolean;
+  isFetching?: boolean;
+  searchQuery?: string;
 }
 
 function ConvenioCardSkeleton() {
@@ -32,10 +34,11 @@ function ConvenioCardSkeleton() {
   );
 }
 
-export function ConveniosGrid({ convenios, onOpen, loading }: ConveniosGridProps) {
-  // Mientras carga (initial fetch o cambio de página/filtro), solo se
-  // reemplazan las tarjetas por skeletons. El resto de la página (barra
-  // de filtros, paginación) sigue montado y en su sitio.
+export function ConveniosGrid({ convenios, onOpen, loading, isFetching }: ConveniosGridProps) {
+  // Skeletons SOLO en la primerísima carga, cuando no hay nada que mostrar
+  // todavía. Para cualquier refetch posterior (cambio de página, filtro,
+  // búsqueda) las cards existentes se quedan montadas — ver el bloque de
+  // abajo, que las atenúa en vez de reemplazarlas.
   if (loading) {
     return (
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
@@ -51,7 +54,11 @@ export function ConveniosGrid({ convenios, onOpen, loading }: ConveniosGridProps
   }
 
   return (
-    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
+    <div
+      className={`grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3 transition-opacity duration-150 ${
+        isFetching ? "opacity-50 pointer-events-none" : "opacity-100"
+      }`}
+    >
       {convenios.map((g, i) => (
         <ConvenioCard key={g.group_key} convenio={g} index={i} onOpen={onOpen} />
       ))}

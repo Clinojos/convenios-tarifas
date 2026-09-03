@@ -1,20 +1,23 @@
 // src/lib/auth.ts
-import { API_BASE_URL } from "@/config/api";
-import { ENDPOINTS } from "@/config/endpoints";
+import { jwtVerify } from "jose";
+
+// Debe ser la MISMA clave con la que el backend firma el token
+// (la que usa create_access_token en tu FastAPI)
+const JWT_SECRET = new TextEncoder().encode(process.env.JWT_SECRET);
 
 export async function isAuthenticated(token?: string) {
   if (!token) return { auth: false, role: null };
 
   try {
-    const response = await fetch(`${API_BASE_URL}${ENDPOINTS.AUTH.ME}`, {
-      headers: { Authorization: `Bearer ${token}` },
-    });
+    // Verifica firma + expiración localmente, SIN llamar al backend
+    const { payload } = await jwtVerify(token, JWT_SECRET);
 
-    if (!response.ok) return { auth: false, role: null };
-
-    const data = await response.json();
-    return { auth: true, role: data.role || "sin_rol" };
+    return {
+      auth: true,
+      role: (payload.role as string) || "sin_rol",
+    };
   } catch (e) {
+    // Firma inválida, token expirado, o malformado
     return { auth: false, role: null };
   }
 }

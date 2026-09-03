@@ -8,7 +8,7 @@ import {
   LayoutDashboard, FileText, Building2, Stethoscope,
   LogOut, ShieldCheck, Users, PanelLeft
 } from "lucide-react";
-import { useUser } from "@/hooks/useUser";
+import { useUser } from "@/context/AuthContext";
 import { usePermissions } from "@/hooks/usePermissions";
 import { useGlobalLoading } from "@/context/LoadingContext";
 import IconButton from "@/components/ui/IconButton";

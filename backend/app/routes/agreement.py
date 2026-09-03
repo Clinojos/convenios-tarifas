@@ -151,6 +151,12 @@ def _get_terceros_names(session: Session, keys: list[str]) -> dict[str, str]:
     (ej. '890903938-8'), mientras que la llave de empresa que manejamos acá
     (MEcntr) puede venir sin él (ej. '890903938'). Por eso el match es por
     prefijo (LIKE 'key%') en vez de igualdad exacta.
+
+    IMPORTANTE (perf): esta función arma un WHERE con un OR LIKE por cada
+    key recibida. Antes se llamaba con TODAS las empresas del catálogo en
+    cada request a /groups, lo cual era el cuello de botella principal del
+    endpoint. Ahora /groups solo la llama con las ~12 keys de la página
+    actual — ver list_agreement_groups.
     """
     keys = [k for k in set(keys) if k]
     if not keys:
@@ -326,6 +332,8 @@ def list_agreement_groups(
     # término normalizado para comparar contra display_name / NIT más abajo
     q_lower = q.strip().lower() if q else None
 
+    # --- Paso 1: agrupar por empresa. Barato, todo en memoria, sin ir a
+    # ninguna otra tabla/servicio todavía. ---
     groups: dict[str, list[Agreement]] = {}
     for agreement in agreements:
         try:
@@ -338,17 +346,9 @@ def list_agreement_groups(
             print(f"Registro corrupto ignorado al agrupar (NIT: {agreement.MEcntr}): {e}")
             continue
 
-    all_keys = list({str(a.MENNIT).strip() for items in groups.values() for a in items if a.MENNIT is not None})
-    all_company_keys = list({
-        _effective_company_key(a.MEcntr, a.MENNIT)
-        for items in groups.values() for a in items if a.MENNIT is not None
-    })
-    procedures_map = _count_procedures(all_keys)
-    meta_map = _get_meta_map(local_session, all_keys)
-    company_map = _get_company_map(local_session, all_company_keys)
-    terceros_map = _get_terceros_names(session, all_company_keys)
-
-    output = []
+    # --- Paso 2: armar "cabeceras" de grupo con lo que ya tenemos en
+    # memoria (nada de TERCEROS/meta/company/procedures todavía). ---
+    headers = []
     for key, items in groups.items():
         fallback_name = min(
             (str(a.MENOMB).strip() for a in items if a.MENOMB is not None),
@@ -356,15 +356,70 @@ def list_agreement_groups(
             default=""
         )
         active_variants = sum(1 for a in items if str(a.MEestado).strip() == '0')
-        any_active = active_variants > 0
+        headers.append({
+            "key": key,
+            "items": items,
+            "fallback_name": fallback_name,
+            "active_variants": active_variants,
+        })
+
+    # --- Paso 2.5: ordenar por el nombre REAL (razón social de TERCEROS),
+    # no por fallback_name. Para esto hace falta el nombre de TODAS las
+    # empresas del catálogo (no se puede saber qué 12 van en la página 1
+    # sin conocer el orden global), pero se resuelve en UNA sola consulta
+    # batcheada (mismo mecanismo que _get_terceros_names, un solo OR LIKE
+    # para todas las keys). Es la única pieza de info que se calcula para
+    # el catálogo completo — el resto (logo, meta, procedimientos) sigue
+    # resolviéndose solo para los 12 de la página en el Paso 3. Este mismo
+    # resultado se reutiliza abajo para el display_name, así no se vuelve
+    # a consultar TERCEROS para las mismas empresas dos veces. ---
+    all_company_keys = list({
+        _effective_company_key(h["items"][0].MEcntr, h["items"][0].MENNIT)
+        for h in headers
+    })
+    sort_names_map = _get_terceros_names(session, all_company_keys)
+
+    for h in headers:
+        company_key = _effective_company_key(h["items"][0].MEcntr, h["items"][0].MENNIT)
+        h["company_key"] = company_key
+        h["sort_name"] = sort_names_map.get(company_key) or h["fallback_name"]
+
+    headers.sort(key=lambda h: h["sort_name"].lower())
+
+    total_groups = len(headers)
+    offset = (page - 1) * limit
+    page_headers = headers[offset: offset + limit]
+
+    # --- Paso 3: resolver metadata PESADA (meta, company, procedures)
+    # SOLO para los grupos de esta página. El nombre (sort_names_map) ya
+    # se resolvió arriba para todo el catálogo, así que acá NO se vuelve a
+    # consultar TERCEROS. ---
+    page_keys = [
+        str(a.MENNIT).strip()
+        for h in page_headers for a in h["items"] if a.MENNIT is not None
+    ]
+    page_company_keys = list({
+        _effective_company_key(a.MEcntr, a.MENNIT)
+        for h in page_headers for a in h["items"] if a.MENNIT is not None
+    })
+
+    procedures_map = _count_procedures(page_keys)
+    meta_map = _get_meta_map(local_session, page_keys)
+    company_map = _get_company_map(local_session, page_company_keys)
+
+    output = []
+    for h in page_headers:
+        items = h["items"]
+        key = h["key"]
+        any_active = h["active_variants"] > 0
 
         first = items[0]
         total_procedures = sum(procedures_map.get(str(a.MENNIT).strip(), 0) for a in items)
 
-        group_company_key = _effective_company_key(first.MEcntr, first.MENNIT)
+        group_company_key = h["company_key"]
         group_company = company_map.get(group_company_key)
 
-        display_name = terceros_map.get(group_company_key) or fallback_name
+        display_name = h["sort_name"]
 
         # Si hubo búsqueda y el término NO aparece en el nombre de la
         # empresa ni en su NIT, el match tuvo que venir de una variante
@@ -383,7 +438,7 @@ def list_agreement_groups(
             "display_name": display_name,
             "matched_variant_names": matched_variant_names,
             "status": "Activo" if any_active else "Inactivo",
-            "active_variants": active_variants,
+            "active_variants": h["active_variants"],
             "total_variants": len(items),
             "variant_keys": [str(a.MENNIT).strip() for a in items],
             "modality": _modality_label(first),
@@ -393,17 +448,11 @@ def list_agreement_groups(
             "total_procedures": total_procedures,
         })
 
-    output.sort(key=lambda g: g["display_name"])
-
-    total_groups = len(output)
-    offset = (page - 1) * limit
-    paginated_output = output[offset: offset + limit]
-
     return {
         "total": total_groups,
         "page": page,
         "limit": limit,
-        "data": paginated_output,
+        "data": output,
     }
 
 @router.get("/groups/{group_key}")
@@ -417,10 +466,23 @@ def get_agreement_group_variants(
     # (MENOMB, vía _serialize_agreement / lógica de abajo), no el de la
     # empresa. Esto es intencional: dentro de un grupo, cada variante es un
     # convenio distinto y debe mostrar su propio nombre de convenio.
+    #
+    # FIX: group_key llega acá ya "trimmeado" (así lo arma /groups, vía
+    # _get_group_key -> .strip()), pero MEcntr/MENNIT en Hosvital pueden
+    # traer espacios sobrantes (campos de ancho fijo). Comparar contra la
+    # columna cruda ("800237286-1   " == "800237286-1") daba 0 filas y la
+    # empresa aparecía como "no encontrada" aunque sí existiera. Se filtra
+    # con func.trim() para que la comparación sea consistente con /groups.
+    group_key = group_key.strip()
+
     query = select(Agreement).where(
-        (Agreement.MEcntr == group_key) | (Agreement.MENNIT == group_key)
+        (func.trim(Agreement.MEcntr) == group_key) |
+        (func.trim(Agreement.MENNIT) == group_key)
     )
     agreements = session.exec(query).all()
+
+    if not agreements:
+        raise HTTPException(status_code=404, detail="Empresa o convenio no encontrado")
 
     keys = _agreement_keys(agreements)
     company_keys = _agreement_company_keys(agreements)
@@ -472,7 +534,6 @@ def get_agreement_group_variants(
         "company_name": company_name,
         "data": output
     }
-
 
 # ---------------------------------------------------------------------------
 # Detalle completo de UN convenio

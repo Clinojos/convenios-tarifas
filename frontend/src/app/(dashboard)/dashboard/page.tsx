@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import { Building2, Stethoscope } from "lucide-react";
+import { Stethoscope } from "lucide-react";
 import { useDashboard } from "@/hooks/useDashboard";
 import { useTopConvenios } from "@/hooks/useTopConvenios";
 import { GlobalSearch } from "@/components/ui/GlobalSearch";
@@ -17,7 +17,6 @@ function avatarColor(nombre: string) {
 export default function DashboardPage() {
   const [query, setQuery] = useState("");
   const { total: totalProcedures, loading: loadingProcedures } = useDashboard("procedures");
-  const { total: totalCompanies, loading: loadingCompanies } = useDashboard("companies");
   const { data: topConvenios, loading: loadingTop } = useTopConvenios(5);
 
   // Solo se muestran KPIs con endpoint real detras. Insumos en catalogo,
@@ -27,16 +26,12 @@ export default function DashboardPage() {
   // Activo/Inactivo por ahora; sin_tarifario/pendiente_digitacion son
   // valores que la spec contempla a futuro, ver seccion 6 del documento).
   //
+  // "Convenios activos" (companies) se quito: no aportaba valor real.
+  //
   // El fondo de cada tarjeta ahora es un color solido (mismo estilo que los
   // avatares de "Convenios mas consultados") con el icono en blanco, en vez
   // del acento tenue de antes.
   const kpis = [
-    {
-      title: "Convenios activos",
-      val: loadingCompanies ? "..." : totalCompanies.toLocaleString(),
-      icon: Building2,
-      accent: "bg-primary",
-    },
     {
       title: "Procedimientos en catalogo",
       val: loadingProcedures ? "..." : totalProcedures.toLocaleString(),
@@ -67,9 +62,9 @@ export default function DashboardPage() {
       {/* 2. KPIs reales, en una sola tarjeta a todo el ancho (mismo contenedor
              que el buscador y "Convenios mas consultados") para que todo
              quede alineado en vez de bloques sueltos de distinto tamano. */}
-      <div className="p-5 border border-slate-100 rounded-2xl bg-white grid grid-cols-1 sm:grid-cols-2 divide-y sm:divide-y-0 sm:divide-x divide-slate-100">
+      <div className="p-5 border border-slate-100 rounded-2xl bg-white grid grid-cols-1 divide-y divide-slate-100">
         {kpis.map((kpi) => (
-          <div key={kpi.title} className="flex items-center gap-4 py-3 sm:py-0 first:pt-0 sm:px-6 first:sm:pl-0 last:sm:pr-0">
+          <div key={kpi.title} className="flex items-center gap-4 py-3 first:pt-0">
             <div className={`w-11 h-11 shrink-0 rounded-xl flex items-center justify-center ${kpi.accent}`}>
               <kpi.icon size={20} className="text-white" />
             </div>
