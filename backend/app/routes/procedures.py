@@ -197,6 +197,13 @@ def get_procedure_detail(
                 "company_name": company_name,
                 "portfolio_name": portfolio.PTDesc.strip(),
                 "price": final_price,
+                # Se exponen igual que en useTarifario/TarifarioBlock, para
+                # que el frontend pueda aplicar la misma regla ISS/SOAT en
+                # esta lista (ISS -> mostrar porcentaje, SOAT -> "UVB {año}"
+                # en vez del precio en pesos).
+                "tariff_name": str(tariff.TrfDsc).strip() if tariff.TrfDsc else None,
+                "tariff_code": str(tariff.TrfCod).strip() if tariff.TrfCod else None,
+                "percent": item.PTPorc,
                 "is_active": is_active,
                 "route": f"/convenios/{contract_key}?highlight={code}&portfolio={portfolio.PTCodi}",
             })
