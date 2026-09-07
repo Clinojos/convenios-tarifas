@@ -5,8 +5,14 @@ import { jwtVerify } from "jose";
 // (la que usa create_access_token en tu FastAPI)
 const JWT_SECRET = new TextEncoder().encode(process.env.JWT_SECRET);
 
-export async function isAuthenticated(token?: string) {
-  if (!token) return { auth: false, role: null };
+type AuthResult = {
+  auth: boolean;
+  role: string | null;
+  permissions: string[];
+};
+
+export async function isAuthenticated(token?: string): Promise<AuthResult> {
+  if (!token) return { auth: false, role: null, permissions: [] };
 
   try {
     // Verifica firma + expiración localmente, SIN llamar al backend
@@ -15,9 +21,12 @@ export async function isAuthenticated(token?: string) {
     return {
       auth: true,
       role: (payload.role as string) || "sin_rol",
+      // Requiere que el backend incluya "permissions" en el payload del JWT
+      // (mismo array que ya devuelve /auth/me).
+      permissions: (payload.permissions as string[]) || [],
     };
   } catch (e) {
     // Firma inválida, token expirado, o malformado
-    return { auth: false, role: null };
+    return { auth: false, role: null, permissions: [] };
   }
 }

@@ -10,7 +10,8 @@ import { EmpresaHeaderCard } from "@/components/convenios/EmpresaHeaderCard";
 import { CompanyCard } from "@/components/convenios/CompanyCard";
 import { EmptyState } from "@/components/convenios/EmptyState";
 import { EmpresaConveniosSkeleton } from "@/components/convenios/skeletons/ConveniosSkeletons";
-import { useBreadcrumb, useBreadcrumbNav } from "../../../../../components/breadcrumb/BreadcrumbContext";
+import { useBreadcrumb, useBreadcrumbNav } from "@/components/breadcrumb/BreadcrumbContext";
+import { RequirePermission } from "@/components/auth/RequirePermission";
 
 const PAGE_SIZE = 12;
 
@@ -112,8 +113,10 @@ function EmpresaConveniosContent() {
 
 export default function EmpresaConveniosPage() {
   return (
-    <Suspense fallback={<EmpresaConveniosSkeleton />}>
-      <EmpresaConveniosContent />
-    </Suspense>
+    <RequirePermission permission="agreement:view">
+      <Suspense fallback={<EmpresaConveniosSkeleton />}>
+        <EmpresaConveniosContent />
+      </Suspense>
+    </RequirePermission>
   );
 }

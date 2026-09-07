@@ -7,6 +7,7 @@ import { API_BASE_URL } from "@/config/api";
 import { COOKIE_NAME } from "@/config/auth";
 import { useDebouncedValue } from "@/hooks/useDebouncedValue";
 import { useBreadcrumb, useBreadcrumbNav } from "@/components/breadcrumb/BreadcrumbContext";
+import { RequirePermission } from "@/components/auth/RequirePermission";
 
 type ProcedureRow = {
   code: string;
@@ -47,6 +48,14 @@ function ProceduresListContent() {
   // DEFAULT_ROWS "a ciegas" y otra con el valor real ya medido).
   const [rowsReady, setRowsReady] = useState(false);
 
+  // IMPORTANTE: este ref se usa solo para MEDIR altura disponible. No debe
+  // tener overflow propio ni scrollbar, porque el ResizeObserver que lo
+  // observa reaccionaría a cambios de tamaño causados por su propia
+  // scrollbar horizontal (aparece/desaparece según el ancho del contenido),
+  // generando un loop infinito: menos altura -> menos filas -> tabla más
+  // corta -> desaparece la scrollbar -> más altura -> más filas -> vuelve a
+  // aparecer la scrollbar -> ... El scroll horizontal real vive en un div
+  // interno aparte (ver JSX más abajo) que no se mide.
   const tableWrapperRef = useRef<HTMLDivElement | null>(null);
   const theadRef = useRef<HTMLTableSectionElement | null>(null);
 
@@ -55,7 +64,7 @@ function ProceduresListContent() {
   useBreadcrumb([
     {
       id: "home",
-      label: "Inicio",
+      label: "Procedimientos",
       icon: Home,
       onClick: () => router.push(listUrl || "/procedimientos"),
     },
@@ -94,7 +103,13 @@ function ProceduresListContent() {
 
     const nextRows = Math.max(MIN_ROWS, Math.floor(available / ROW_HEIGHT_ESTIMATE));
 
-    setRowsPerPage((prev) => (prev === nextRows ? prev : nextRows));
+    setRowsPerPage((prev) => {
+      // Tolerancia de ±1 fila: evita toggles infinitos causados por
+      // redondeos de 1px o por pequeñas variaciones de layout que no
+      // representan un cambio real de tamaño de la ventana/contenedor.
+      if (Math.abs(prev - nextRows) <= 1) return prev;
+      return nextRows;
+    });
     setRowsReady(true);
   }, []);
 
@@ -196,6 +211,13 @@ function ProceduresListContent() {
 
   const totalPages = Math.max(1, Math.ceil(total / rowsPerPage));
   const isLoading = loading || isDebouncing || !rowsReady;
+  // Skeleton de página completa SOLO quiando aún no hay ninguna fila en
+  // pantalla (primera carga real). Si ya había datos (cambio de página,
+  // búsqueda, o el ajuste automático de rowsPerPage), preferimos mantener
+  // la tabla visible y solo atenuarla, para evitar el parpadeo de
+  // tabla -> skeleton -> tabla en cada fetch.
+  const showFullSkeleton = isLoading && rows.length === 0;
+  const showStaleOverlay = isLoading && rows.length > 0;
 
   const goToPage = (newPage: number) => {
     if (newPage < 1 || newPage > totalPages) return;
@@ -226,53 +248,62 @@ function ProceduresListContent() {
 
         {error && <p className="mt-3 text-[12px] text-red-500 shrink-0">Error al cargar los procedimientos.</p>}
 
-        {/* El wrapper medible ahora está SIEMPRE montado (loading o no), para
-            que el ResizeObserver pueda medirlo antes del primer fetch. Lo
-            que cambia adentro es solo el contenido (skeleton vs tabla). */}
-        <div ref={tableWrapperRef} className="mt-3 flex-1 min-h-0 overflow-x-auto overflow-y-hidden">
-          {isLoading ? (
-            <div className="space-y-2">
-              {Array.from({ length: rowsPerPage }).map((_, i) => (
-                <div key={i} className="h-8 bg-slate-50 rounded animate-pulse" />
-              ))}
-            </div>
-          ) : rows.length > 0 ? (
-            <table className="w-full text-[12px] border-separate border-spacing-0">
-              <thead ref={theadRef}>
-                <tr className="text-left text-slate-400 text-[10px] uppercase tracking-wide">
-                  <th className="font-medium pb-2 w-28">Código CUPS</th>
-                  <th className="font-medium pb-2">Nombre del procedimiento</th>
-                  <th className="font-medium pb-2 text-right w-24">Convenios</th>
-                </tr>
-              </thead>
-              <tbody>
-                {rows.map((proc) => (
-                  <tr
-                    key={proc.code}
-                    onClick={() => router.push(`/procedimientos/${proc.code}`)}
-                    className="cursor-pointer border-t border-slate-50 hover:bg-slate-50 transition-colors"
-                  >
-                    <td className="py-2 text-navy font-medium">{proc.code}</td>
-                    <td className="py-2 text-slate-700 truncate max-w-0">{proc.name}</td>
-                    <td className="py-2 text-right text-slate-500 font-medium">
-                      {proc.total_offers ?? "—"}
-                    </td>
-                  </tr>
+        {/* Este div SOLO se usa para medir la altura disponible (ResizeObserver).
+            No tiene overflow propio: por eso "overflow-hidden" en vez de
+            "overflow-x-auto". El scroll horizontal real vive en el div hijo
+            de abajo, para que la scrollbar horizontal (que aparece/desaparece
+            según el ancho del contenido) no altere el clientHeight de este
+            wrapper y dispare un loop infinito de recálculo -> fetch. */}
+        <div ref={tableWrapperRef} className="mt-3 flex-1 min-h-0 overflow-hidden">
+          <div className="h-full overflow-x-auto overflow-y-hidden">
+            {showFullSkeleton ? (
+              <div className="space-y-2">
+                {Array.from({ length: rowsPerPage }).map((_, i) => (
+                  <div key={i} className="h-8 bg-slate-50 rounded animate-pulse" />
                 ))}
-              </tbody>
-            </table>
-          ) : (
-            <div className="py-10 text-center">
-              <p className="text-[13px] font-semibold text-navy">
-                {searchInput.trim()
-                  ? "Sin procedimientos encontrados para esta búsqueda"
-                  : "No hay procedimientos registrados"}
-              </p>
-            </div>
-          )}
+              </div>
+            ) : rows.length > 0 ? (
+              <table
+                className={`w-full text-[12px] border-separate border-spacing-0 transition-opacity duration-150 ${
+                  showStaleOverlay ? "opacity-50" : "opacity-100"
+                }`}
+              >
+                <thead ref={theadRef}>
+                  <tr className="text-left text-slate-400 text-[10px] uppercase tracking-wide">
+                    <th className="font-medium pb-2 w-28">Código CUPS</th>
+                    <th className="font-medium pb-2">Nombre del procedimiento</th>
+                    <th className="font-medium pb-2 text-right w-24">Convenios</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {rows.map((proc) => (
+                    <tr
+                      key={proc.code}
+                      onClick={() => router.push(`/procedimientos/${proc.code}`)}
+                      className="cursor-pointer border-t border-slate-50 hover:bg-slate-50 transition-colors"
+                    >
+                      <td className="py-2 text-navy font-medium">{proc.code}</td>
+                      <td className="py-2 text-slate-700 truncate max-w-0">{proc.name}</td>
+                      <td className="py-2 text-right text-slate-500 font-medium">
+                        {proc.total_offers ?? "—"}
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            ) : (
+              <div className="py-10 text-center">
+                <p className="text-[13px] font-semibold text-navy">
+                  {searchInput.trim()
+                    ? "Sin procedimientos encontrados para esta búsqueda"
+                    : "No hay procedimientos registrados"}
+                </p>
+              </div>
+            )}
+          </div>
         </div>
 
-        {!isLoading && rows.length > 0 && (
+        {(!isLoading || showStaleOverlay) && rows.length > 0 && (
           <div className="mt-4 flex items-center justify-between shrink-0">
             <p className="text-[11px] text-slate-400">
               {total} procedimiento{total !== 1 ? "s" : ""} · página {page} de {totalPages}
@@ -304,8 +335,10 @@ function ProceduresListContent() {
 
 export default function ProceduresListPage() {
   return (
-    <Suspense fallback={null}>
-      <ProceduresListContent />
-    </Suspense>
+    <RequirePermission permission="procedures:view">
+      <Suspense fallback={null}>
+        <ProceduresListContent />
+      </Suspense>
+    </RequirePermission>
   );
 }

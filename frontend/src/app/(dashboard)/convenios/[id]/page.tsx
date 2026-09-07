@@ -1,7 +1,7 @@
 "use client";
 
 import { useParams, useSearchParams, useRouter } from "next/navigation";
-import { useState } from "react";
+import { useState, Suspense } from "react";
 import { Layers, Info, Home, Building2, Briefcase } from "lucide-react";
 import { TarifarioBlock } from "@/components/convenios/TarifarioBlock";
 import { InformacionContrato } from "@/components/convenios/InformacionContrato";
@@ -17,6 +17,7 @@ import { ConvenioDetalleSkeleton } from "@/components/convenios/skeletons/Conven
 import { useConvenioDetail } from "@/hooks/useConvenioDetail";
 import { parseObservaciones } from "@/lib/parseObservaciones";
 import { useBreadcrumb, useBreadcrumbNav } from "../../../../components/breadcrumb/BreadcrumbContext";
+import { RequirePermission } from "@/components/auth/RequirePermission";
 
 // ---------------------------------------------------------------------------
 // Pestañas
@@ -119,7 +120,7 @@ function TabPanel({
 // Componente
 // ---------------------------------------------------------------------------
 
-export default function ConvenioDetallePage() {
+function ConvenioDetalleContent() {
   const params = useParams<{ id: string }>();
   const searchParams = useSearchParams();
   const router = useRouter();
@@ -214,5 +215,15 @@ export default function ConvenioDetallePage() {
         />
       </div>
     </>
+  );
+}
+
+export default function ConvenioDetallePage() {
+  return (
+    <RequirePermission permission="agreement:view">
+      <Suspense fallback={<ConvenioDetalleSkeleton />}>
+        <ConvenioDetalleContent />
+      </Suspense>
+    </RequirePermission>
   );
 }

@@ -1,5 +1,5 @@
 // frontend/src/hooks/usePermissions.ts
-import { useUser } from "@/context/AuthContext"; // 👈 antes: "./useUser"
+import { useUser } from "@/context/AuthContext";
 
 export const usePermissions = () => {
   const { user, loading } = useUser();

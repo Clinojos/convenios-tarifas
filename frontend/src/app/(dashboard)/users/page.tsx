@@ -8,6 +8,7 @@ import { useUserFilters } from "@/hooks/useUserFilters";
 
 import UsersListPanel from "@/components/users/UsersListPanel";
 import UserDetailsPanel from "@/components/users/UserDetailsPanel";
+import { RequirePermission } from "@/components/auth/RequirePermission";
 
 import { toast } from "sonner";
 import { API_BASE_URL } from "@/config/api";
@@ -147,8 +148,10 @@ function UsersContent() {
 
 export default function UsersPage() {
   return (
-    <Suspense fallback={<Loading />}>
-      <UsersContent />
-    </Suspense>
+    <RequirePermission permission="users:view">
+      <Suspense fallback={<Loading />}>
+        <UsersContent />
+      </Suspense>
+    </RequirePermission>
   );
 }

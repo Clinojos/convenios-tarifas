@@ -12,6 +12,7 @@ import Modal from "@/components/ui/Modal";
 import RoleForm from "@/components/roles/RoleForm";
 import RolesGrid from "@/components/roles/RolesGrid";
 import { FilterBar } from "@/components/ui/FilterBar";
+import { RequirePermission } from "@/components/auth/RequirePermission";
 
 import { toast } from "sonner";
 
@@ -187,8 +188,10 @@ function RolesContent() {
 
 export default function RolesPage() {
   return (
-    <Suspense fallback={<Loading />}>
-      <RolesContent />
-    </Suspense>
+    <RequirePermission permission="roles:view">
+      <Suspense fallback={<Loading />}>
+        <RolesContent />
+      </Suspense>
+    </RequirePermission>
   );
 }

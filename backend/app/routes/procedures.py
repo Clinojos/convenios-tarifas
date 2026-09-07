@@ -175,6 +175,45 @@ def get_procedure_detail(
     )
     rows = session.exec(stmt).all()
 
+    # FIX: AgreementPortfolio (la tabla puente convenio<->portafolio) tiene
+    # filas duplicadas para algunos pares (MENNIT, PTCodi) — el mismo
+    # convenio vinculado al mismo portafolio más de una vez, por un error
+    # de carga de datos. Como el JOIN de arriba entra por AgreementPortfolio,
+    # cada fila de PortfolioItem se multiplica tantas veces como filas
+    # duplicadas haya en AgreementPortfolio para ese par, y el mismo
+    # convenio+portafolio+tarifa+precio termina apareciendo repetido en el
+    # resultado (visible en /procedimientos/{code} como filas idénticas).
+    #
+    # Se deduplica aquí, en el origen, en vez de en el frontend, para que
+    # cualquier consumidor futuro de este query quede protegido y no solo
+    # la pantalla de detalle de procedimiento.
+    #
+    # Llave de unicidad: convenio + portafolio + item de tarifa (PRCODI +
+    # TrfCod dentro de PortfolioItem). Estos juntos determinan una oferta
+    # real; si se repiten es porque la fila puente está duplicada, no
+    # porque sea una oferta distinta.
+    #
+    # NOTA: esto es un parche a nivel de aplicación. La causa raíz sigue
+    # viva en la tabla AgreementPortfolio — lo ideal es agregar ahí una
+    # restricción UNIQUE sobre (MENNIT, PTCodi) y limpiar los duplicados
+    # existentes, para que ningún otro endpoint que la use en el futuro
+    # herede el mismo problema.
+    seen_keys = set()
+    deduped_rows = []
+    for row in rows:
+        item, portfolio, agreement, tariff, price = row
+        key = (
+            str(agreement.MENNIT).strip(),
+            portfolio.PTCodi,
+            item.PRCODI,
+            item.TrfCod,
+        )
+        if key in seen_keys:
+            continue
+        seen_keys.add(key)
+        deduped_rows.append(row)
+    rows = deduped_rows
+
     company_keys = list(set(
         effective_company_key(a.MEcntr, a.MENNIT) for _, _, a, _, _ in rows
     ))
@@ -190,12 +229,19 @@ def get_procedure_detail(
             convenio_name = str(agreement.MENOMB).strip() if agreement.MENOMB else ""
             company_name = terceros_map.get(company_key) or convenio_name
             is_active = str(agreement.MEestado).strip() == "0"
+            # Mismo criterio que get_portfolios_by_contract (usado por
+            # useTarifario/TarifarioBlock): el portafolio es un estado
+            # independiente del convenio, "S" = activo. Un convenio activo
+            # puede tener un portafolio inactivo y viceversa, así que no se
+            # puede derivar uno del otro.
+            portfolio_is_active = str(portfolio.PTEst).strip() == "S" if portfolio.PTEst else False
 
             offers.append({
                 "contract_key": contract_key,
                 "convenio_name": convenio_name,
                 "company_name": company_name,
                 "portfolio_name": portfolio.PTDesc.strip(),
+                "portfolio_is_active": portfolio_is_active,
                 "price": final_price,
                 # Se exponen igual que en useTarifario/TarifarioBlock, para
                 # que el frontend pueda aplicar la misma regla ISS/SOAT en
@@ -211,7 +257,10 @@ def get_procedure_detail(
             print(f"Error procesando oferta de {code} en convenio {agreement.MENNIT}: {e}")
             continue
 
-    offers.sort(key=lambda o: (not o["is_active"], o["price"]))
+    # Activos primero: convenio activo Y portafolio activo antes que
+    # cualquier combinación con alguno de los dos inactivo; dentro de cada
+    # grupo, por precio ascendente.
+    offers.sort(key=lambda o: (not (o["is_active"] and o["portfolio_is_active"]), o["price"]))
 
     return {
         "code": str(procedure.PRCODI).strip(),

@@ -4,6 +4,7 @@ import { useState } from "react";
 import { Stethoscope } from "lucide-react";
 import { useDashboard } from "@/hooks/useDashboard";
 import { useTopConvenios } from "@/hooks/useTopConvenios";
+import { useConvenios } from "@/hooks/useConvenios";
 import { GlobalSearch } from "@/components/ui/GlobalSearch";
 
 // Iniciales con un color por convenio, hash simple sobre el nombre para que
@@ -19,18 +20,35 @@ export default function DashboardPage() {
   const { total: totalProcedures, loading: loadingProcedures } = useDashboard("procedures");
   const { data: topConvenios, loading: loadingTop } = useTopConvenios(5);
 
-  // Solo se muestran KPIs con endpoint real detras. Insumos en catalogo,
-  // ultima actualizacion, "sin tarifario" y "pendiente de digitacion" se
-  // quitaron porque no existe todavia una fuente de datos real para ellos
-  // (el campo `estado` del convenio en el backend solo distingue
-  // Activo/Inactivo por ahora; sin_tarifario/pendiente_digitacion son
-  // valores que la spec contempla a futuro, ver seccion 6 del documento).
+  // Conteo de convenios por estado, para la barra de "Estado de convenios".
   //
-  // "Convenios activos" (companies) se quito: no aportaba valor real.
+  // OJO: /agreements/groups?status=... tiene un bug de backend (compara el
+  // valor recibido contra el string ingles 'active', pero el frontend/UI
+  // maneja "Activo"/"Inactivo" en espanol -> el filtro nunca matchea nada
+  // y ambas llamadas devuelven el mismo resultado). Reportado aparte.
   //
-  // El fondo de cada tarjeta ahora es un color solido (mismo estilo que los
-  // avatares de "Convenios mas consultados") con el icono en blanco, en vez
-  // del acento tenue de antes.
+  // Ademas, aun arreglando eso, el filtro de /groups actua a nivel de
+  // VARIANTE antes de agrupar: un grupo con variantes mixtas (activa +
+  // inactiva) apareceria en las dos consultas filtradas, inflando la suma.
+  //
+  // Por eso acá se trae el catálogo SIN filtro (limit alto para cubrir
+  // todos los grupos existentes) y se cuenta en el cliente usando el campo
+  // `status` que el backend ya calcula por grupo (any_active -> "Activo"),
+  // el mismo criterio que usan las tarjetas de "Convenios mas consultados".
+  // Si el catalogo crece mucho mas alla de este limit, hay que pedir un
+  // endpoint de agregado dedicado en vez de subir el numero a mano.
+  const { convenios: allConvenios, loading: loadingStatus } = useConvenios({
+    page: 1,
+    limit: 1000,
+    searchQuery: "",
+    status: "",
+  });
+  const activos = allConvenios.filter((c) => c.status === "Activo").length;
+  const inactivos = allConvenios.filter((c) => c.status === "Inactivo").length;
+
+  // Solo se muestran KPIs con endpoint real detras. Insumos en catalogo y
+  // ultima actualizacion se quitaron: no hay fuente de datos real para
+  // ellos todavia.
   const kpis = [
     {
       title: "Procedimientos en catalogo",
@@ -39,6 +57,10 @@ export default function DashboardPage() {
       accent: "bg-emerald-500",
     },
   ];
+
+  const totalConvenios = activos + inactivos;
+  const pctActivos = totalConvenios > 0 ? Math.round((activos / totalConvenios) * 100) : 0;
+  const pctInactivos = totalConvenios > 0 ? 100 - pctActivos : 0;
 
   return (
     <div className="max-w-[1200px] mx-auto space-y-8 p-6 md:p-8 font-sans">
@@ -76,7 +98,39 @@ export default function DashboardPage() {
         ))}
       </div>
 
-      {/* 3. Accesos directos a convenios mas consultados - datos reales de
+      {/* 3. Estado de convenios: barra apilada vigentes vs vencidos/inactivos.
+             Depende de useAgreementsStatus (ver TODO arriba). Mientras no
+             haya datos reales, se muestra un estado de carga simple; si el
+             hook devuelve 0 y 0, no se renderiza la barra (nada que mostrar
+             es mejor que mostrar una barra vacia o inventada). */}
+      <div className="p-5 border border-slate-100 rounded-2xl bg-white">
+        <h3 className="text-[12px] font-medium text-slate-700 mb-3">Estado de convenios</h3>
+
+        {loadingStatus ? (
+          <div className="h-2.5 rounded-full bg-slate-100 animate-pulse" />
+        ) : totalConvenios === 0 ? (
+          <p className="text-xs text-slate-400 py-2">Aun no hay datos de estado de convenios disponibles.</p>
+        ) : (
+          <>
+            <div className="flex h-2.5 rounded-full overflow-hidden">
+              <div className="bg-emerald-500" style={{ width: `${pctActivos}%` }} title={`Activos ${pctActivos}%`} />
+              <div className="bg-rose-500" style={{ width: `${pctInactivos}%` }} title={`Inactivos ${pctInactivos}%`} />
+            </div>
+            <div className="flex gap-4 mt-2 text-[11px] text-slate-500">
+              <span className="flex items-center gap-1">
+                <span className="w-2 h-2 rounded-sm bg-emerald-500" />
+                Activos {pctActivos}% ({activos})
+              </span>
+              <span className="flex items-center gap-1">
+                <span className="w-2 h-2 rounded-sm bg-rose-500" />
+                Inactivos {pctInactivos}% ({inactivos})
+              </span>
+            </div>
+          </>
+        )}
+      </div>
+
+      {/* 4. Accesos directos a convenios mas consultados - datos reales de
              /api/v1/agreements/top-consultadas. group_key es el contract_key
              del CONVENIO individual (no de la empresa), asi que "BANCO" y
              "BANCO1" salen como tarjetas separadas aunque ambos sean de
