@@ -3,7 +3,6 @@ import urllib
 from sqlalchemy import create_engine
 from sqlmodel import Session, SQLModel
 from dotenv import load_dotenv
-from app.models.roles_permissions import local_metadata
 
 # Corregimos la ruta: subimos un nivel (..) desde app/ para llegar a backend/.env
 dotenv_path = os.path.join(os.path.dirname(__file__), "..", ".env")
@@ -15,11 +14,8 @@ db_password = os.getenv("DB_PASSWORD")
 db_server = os.getenv("DB_HOST")
 db_name = os.getenv("DB_NAME")
 
-# Controla el echo de SQLAlchemy por ambiente en vez de dejarlo fijo.
-# En .env pon SQL_ECHO=true solo cuando necesites depurar queries.
 SQL_ECHO = os.getenv("SQL_ECHO", "false").lower() == "true"
 
-# Validación estricta para asegurar que el .env se cargó
 if not all([db_user, db_password, db_server, db_name]):
     raise Exception(
         f"Faltan variables de entorno en {os.path.abspath(dotenv_path)}. "
@@ -38,7 +34,6 @@ DATABASE_URL_HOSVITAL = f"mssql+pyodbc:///?odbc_connect={params}"
 engine_hosvital = create_engine(DATABASE_URL_HOSVITAL, echo=SQL_ECHO)
 
 # 2. Configuración de SQLite (Local)
-# Se asegura que la carpeta Database exista
 if not os.path.exists("./Database"):
     os.makedirs("./Database")
 
@@ -46,7 +41,7 @@ SQLITE_URL = "sqlite:///./Database/app_control.db"
 engine_local = create_engine(SQLITE_URL, connect_args={"check_same_thread": False}, echo=SQL_ECHO)
 
 def init_db():
-    local_metadata.create_all(engine_local)
+    pass
 
 # 3. Sesiones
 def get_session_hosvital():

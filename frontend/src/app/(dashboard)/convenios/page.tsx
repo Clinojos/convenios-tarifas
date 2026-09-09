@@ -10,7 +10,6 @@ import { Pagination } from "@/components/ui/Pagination";
 import { ConveniosGrid } from "@/components/convenios/ConveniosGrid";
 import type { ConvenioGroup } from "@/components/convenios/types";
 import { useBreadcrumb, useBreadcrumbNav } from "@/components/breadcrumb/BreadcrumbContext";
-import { RequirePermission } from "@/components/auth/RequirePermission";
 
 import Loading from "./loading";
 
@@ -145,10 +144,8 @@ function ConveniosContent() {
 
 export default function ConveniosPage() {
   return (
-    <RequirePermission permission="agreement:view">
-      <Suspense fallback={<Loading />}>
-        <ConveniosContent />
-      </Suspense>
-    </RequirePermission>
+    <Suspense fallback={<Loading />}>
+      <ConveniosContent />
+    </Suspense>
   );
 }

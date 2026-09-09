@@ -4,7 +4,6 @@ import { useRef, useEffect } from "react";
 import { Search, Stethoscope, X, Hash, ArrowRight, Loader2 } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { useSearch } from "@/hooks/useSearch";
-import { usePermissions } from "@/hooks/usePermissions";
 
 // Un código CUPS real siempre es numérico (ver especificación §5: "470201", "097100").
 const CUPS_PATTERN = /^\d{4,6}$/;
@@ -63,7 +62,6 @@ export function GlobalSearch({
 }: GlobalSearchProps) {
   const inputRef = useRef<HTMLInputElement>(null);
   const { results, isLoading, isPending, isLoadingMore, isOpen, setIsOpen, hasMore, loadMore } = useSearch(query);
-  const { hasPermission, loading: permsLoading } = usePermissions();
   const router = useRouter();
 
   useEffect(() => {
@@ -84,10 +82,7 @@ export function GlobalSearch({
     return () => window.removeEventListener("keydown", handleKeyDown);
   }, [autoFocus, setIsOpen]);
 
-  const canViewProcedures = hasPermission("procedures:view");
-  const filteredResults = permsLoading || !canViewProcedures
-    ? []
-    : results.filter((item: any) => item.type === "Procedimiento");
+  const filteredResults = results.filter((item: any) => item.type === "Procedimiento");
 
   const clearSearch = () => {
     onQueryChange("");
@@ -100,7 +95,7 @@ export function GlobalSearch({
   };
 
   const handleSearch = (e: React.KeyboardEvent) => {
-    if (e.key !== "Enter" || query.trim().length === 0 || !canViewProcedures) return;
+    if (e.key !== "Enter" || query.trim().length === 0) return;
 
     const trimmed = query.trim();
     if (CUPS_PATTERN.test(trimmed)) {
@@ -112,7 +107,6 @@ export function GlobalSearch({
   };
 
   const handleNavigation = (item: any) => {
-    if (!canViewProcedures) return;
     router.push(item.route);
     setIsOpen(false);
     onQueryChange("");
@@ -194,7 +188,7 @@ export function GlobalSearch({
           onMouseDown={(e) => e.preventDefault()}
           className="absolute top-full mt-2 w-full bg-white border border-slate-100 rounded-xl shadow-lg p-2 max-h-96 overflow-y-auto z-[100] text-left"
         >
-          {isLoading || permsLoading ? (
+          {isLoading ? (
             <SearchingIndicator />
           ) : filteredResults.length > 0 ? (
             <>

@@ -5,35 +5,62 @@ import Link from "next/link";
 import Image from "next/image";
 import { usePathname } from "next/navigation";
 import {
-  LayoutDashboard, FileText, Building2, Stethoscope,
-  LogOut, ShieldCheck, Users, PanelLeft
+  LayoutDashboard, Building2, Stethoscope,
+  LogOut, PanelLeft, Pencil
 } from "lucide-react";
 import { useUser } from "@/context/AuthContext";
-import { usePermissions } from "@/hooks/usePermissions";
 import { useGlobalLoading } from "@/context/LoadingContext";
 import IconButton from "@/components/ui/IconButton";
 import { COOKIE_NAME } from "@/config/auth";
+import { API_BASE_URL } from "@/config/api";
+import { ENDPOINTS } from "@/config/endpoints";
 
 const navItems = [
-  { label: "Inicio", href: "/dashboard", icon: LayoutDashboard, requiredPermission: "" },
-  { label: "Convenios", href: "/convenios", icon: Building2, requiredPermission: "agreement:view" },
-  { label: "Procedimientos", href: "/procedimientos", icon: Stethoscope, requiredPermission: "procedures:view" },
-  /*{ label: "Tarifas y Servicios", href: "/tariffs", icon: FileText, requiredPermission: "tariffs:view" },*/
-  { label: "Roles y Permisos", href: "/roles", icon: ShieldCheck, requiredPermission: "roles:view" },
-  { label: "Usuarios", href: "/users", icon: Users, requiredPermission: "users:view" },
+  { label: "Inicio", href: "/dashboard", icon: LayoutDashboard },
+  { label: "Convenios", href: "/convenios", icon: Building2 },
+  { label: "Procedimientos", href: "/procedimientos", icon: Stethoscope },
+  /*{ label: "Tarifas y Servicios", href: "/tariffs", icon: FileText },*/
 ];
 
 const COLLAPSED_WIDTH = "w-12"; // 48px
 const EXPANDED_WIDTH = "w-[200px]";
 
-// Un item queda "activo" si la ruta actual es exactamente su href, o si es una
-// subruta suya (ej. /convenios/compensar-eps-principal debe marcar "Convenios").
-// "/dashboard" no usa startsWith porque, si no, marcaría cualquier ruta que
-// empezara por "/dashboard-algo"; con "/" ni siquiera aplica por ser el único
-// nivel raíz real del listado, así que basta comparar con "/" + "/".
 function isNavItemActive(pathname: string, href: string) {
   if (href === "/") return pathname === "/";
   return pathname === href || pathname.startsWith(`${href}/`);
+}
+
+// Avatar reutilizable: muestra la foto si existe, si no, el inicial.
+function UserAvatar({
+  photoUrl,
+  initial,
+  size = "w-7 h-7",
+}: {
+  photoUrl: string | null;
+  initial: string;
+  size?: string;
+}) {
+  const [imgError, setImgError] = useState(false);
+
+  if (photoUrl && !imgError) {
+    return (
+      // eslint-disable-next-line @next/next/no-img-element
+      <img
+        src={photoUrl}
+        alt="Foto de perfil"
+        className={`${size} rounded-full object-cover shrink-0 shadow-sm`}
+        onError={() => setImgError(true)}
+      />
+    );
+  }
+
+  return (
+    <div
+      className={`${size} rounded-full bg-white text-navy flex items-center justify-center text-[10px] font-bold shadow-sm shrink-0`}
+    >
+      {initial}
+    </div>
+  );
 }
 
 export function Sidebar() {
@@ -41,16 +68,16 @@ export function Sidebar() {
   const [isMounted, setIsMounted] = useState(false);
   const [collapsed, setCollapsed] = useState(false);
   const [menuOpen, setMenuOpen] = useState(false);
+  const [savingAlias, setSavingAlias] = useState(false);
   const menuRef = useRef<HTMLDivElement>(null);
   const pathname = usePathname();
   const { user, loading: userLoading } = useUser();
-  const { hasPermission, loading: permsLoading } = usePermissions();
 
   useEffect(() => {
     setIsMounted(true);
   }, []);
 
-  const isLoading = !isMounted || userLoading || permsLoading;
+  const isLoading = !isMounted || userLoading;
 
   useEffect(() => {
     setIsLoading(isLoading);
@@ -66,10 +93,54 @@ export function Sidebar() {
     return () => document.removeEventListener("mousedown", handleClickOutside);
   }, [menuOpen]);
 
- const handleLogout = () => {
-  document.cookie = `${COOKIE_NAME}=; expires=Thu, 01 Jan 1970 00:00:00 UTC; path=/;`;
-  window.location.href = "/login";
-};
+  const handleLogout = () => {
+    document.cookie = `${COOKIE_NAME}=; expires=Thu, 01 Jan 1970 00:00:00 UTC; path=/;`;
+    window.location.href = "/login";
+  };
+
+  const getToken = () => {
+    return document.cookie
+      .split("; ")
+      .find((row) => row.startsWith(`${COOKIE_NAME}=`))
+      ?.split("=")[1];
+  };
+
+  const handleChangeAlias = async () => {
+    const newAlias = window.prompt(
+      "¿Cómo quieres que aparezca tu nombre?",
+      user?.name ?? ""
+    );
+
+    if (newAlias === null) return; // el usuario canceló
+
+    const trimmed = newAlias.trim();
+    const token = getToken();
+    if (!token) return;
+
+    setSavingAlias(true);
+    setMenuOpen(false);
+
+    try {
+      const response = await fetch(`${API_BASE_URL}${ENDPOINTS.AUTH.ME_ALIAS}`, {
+        method: "PUT",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${token}`,
+        },
+        body: JSON.stringify({ display_name: trimmed || null }),
+      });
+
+      if (response.ok) {
+        window.location.reload();
+      } else {
+        console.error("No se pudo actualizar el alias:", response.status);
+      }
+    } catch (e) {
+      console.error("Error actualizando alias:", e);
+    } finally {
+      setSavingAlias(false);
+    }
+  };
 
   return (
     <aside
@@ -77,14 +148,12 @@ export function Sidebar() {
         collapsed ? COLLAPSED_WIDTH : EXPANDED_WIDTH
       }`}
     >
-      {/* Wrapper solo para recortar los blobs decorativos, sin afectar tooltips */}
       <div className="absolute inset-0 overflow-hidden pointer-events-none">
         <div className="absolute -top-6 -right-8 w-28 h-28 bg-white/10 rounded-full animate-blob-float" />
         <div className="absolute top-1/2 -left-10 w-24 h-24 bg-white/10 rounded-full animate-blob-float [animation-delay:2s]" />
         <div className="absolute -bottom-10 -right-6 w-20 h-20 bg-white/10 rounded-full animate-blob-float [animation-delay:4s]" />
       </div>
 
-      {/* Logo / toggle */}
       <div
         className={`relative z-20 border-b border-white/15 flex items-center ${
           collapsed ? "justify-center py-3" : "justify-between px-5 py-6"
@@ -111,7 +180,7 @@ export function Sidebar() {
 
       <nav className={`relative z-10 flex-1 py-4 space-y-1 ${collapsed ? "px-1.5" : "px-2"}`}>
         {isLoading ? (
-          Array.from({ length: 5 }).map((_, i) => (
+          Array.from({ length: 3 }).map((_, i) => (
             <div
               key={i}
               className={`flex items-center gap-2 py-1.5 animate-pulse ${collapsed ? "justify-center" : "px-3"}`}
@@ -121,41 +190,39 @@ export function Sidebar() {
             </div>
           ))
         ) : (
-          navItems
-            .filter((item) => !item.requiredPermission || hasPermission(item.requiredPermission))
-            .map((item) => {
-              const Icon = item.icon;
-              const isActive = isNavItemActive(pathname, item.href);
+          navItems.map((item) => {
+            const Icon = item.icon;
+            const isActive = isNavItemActive(pathname, item.href);
 
-              return (
-                <div key={item.href} className="relative group flex items-center">
-                  <Link
-                    href={item.href}
-                    className={`flex items-center gap-2 px-3 py-1.5 rounded-lg text-xs font-medium transition-all w-full overflow-hidden ${
-                      isActive
-                        ? "bg-white text-navy shadow-md shadow-black/10"
-                        : "text-white/80 hover:bg-white/10 hover:text-white"
+            return (
+              <div key={item.href} className="relative group flex items-center">
+                <Link
+                  href={item.href}
+                  className={`flex items-center gap-2 px-3 py-1.5 rounded-lg text-xs font-medium transition-all w-full overflow-hidden ${
+                    isActive
+                      ? "bg-white text-navy shadow-md shadow-black/10"
+                      : "text-white/80 hover:bg-white/10 hover:text-white"
+                  }`}
+                >
+                  <Icon className={`w-4 h-4 shrink-0 ${isActive ? "text-primary" : "text-white/80"}`} />
+                  <span
+                    className={`whitespace-nowrap transition-all duration-200 ease-in-out overflow-hidden ${
+                      collapsed ? "max-w-0 opacity-0" : "max-w-[140px] opacity-100"
                     }`}
                   >
-                    <Icon className={`w-4 h-4 shrink-0 ${isActive ? "text-primary" : "text-white/80"}`} />
-                    <span
-                      className={`whitespace-nowrap transition-all duration-200 ease-in-out overflow-hidden ${
-                        collapsed ? "max-w-0 opacity-0" : "max-w-[140px] opacity-100"
-                      }`}
-                    >
-                      {item.label}
-                    </span>
-                  </Link>
+                    {item.label}
+                  </span>
+                </Link>
 
-                  {collapsed && (
-                    <span className="absolute left-full ml-2 scale-0 transition-all rounded-md bg-white border border-[#D9EEF8] px-2 py-1 text-[10px] font-medium text-[#6B9BAE] shadow-sm group-hover:scale-100 whitespace-nowrap z-50">
-                      {item.label}
-                      <span className="absolute right-full top-1/2 -mt-1 -mr-1 h-2 w-2 rotate-45 bg-white border-l border-b border-[#D9EEF8]" />
-                    </span>
-                  )}
-                </div>
-              );
-            })
+                {collapsed && (
+                  <span className="absolute left-full ml-2 scale-0 transition-all rounded-md bg-white border border-[#D9EEF8] px-2 py-1 text-[10px] font-medium text-[#6B9BAE] shadow-sm group-hover:scale-100 whitespace-nowrap z-50">
+                    {item.label}
+                    <span className="absolute right-full top-1/2 -mt-1 -mr-1 h-2 w-2 rotate-45 bg-white border-l border-b border-[#D9EEF8]" />
+                  </span>
+                )}
+              </div>
+            );
+          })
         )}
       </nav>
 
@@ -167,10 +234,18 @@ export function Sidebar() {
               collapsed ? "left-1.5 w-44" : "left-2 right-2"
             }`}
           >
-            <div className="px-3 py-2 border-b border-black/5">
+            <div className="px-3 py-2 border-b border-black/5 flex items-center gap-2">
+              <UserAvatar photoUrl={user?.photoUrl ?? null} initial={user?.initial ?? "U"} size="w-6 h-6" />
               <p className="text-[11px] font-semibold text-[#1E1E1E] truncate">{user?.name}</p>
-              <p className="text-[10px] text-black/40 truncate uppercase tracking-wide">{user?.role || "Sin rol"}</p>
             </div>
+            <button
+              onClick={handleChangeAlias}
+              disabled={savingAlias}
+              className="cursor-pointer w-full flex items-center gap-2 px-3 py-2 text-[11px] text-[#1E1E1E] hover:bg-black/5 transition-colors disabled:opacity-50"
+            >
+              <Pencil className="w-3.5 h-3.5" />
+              {savingAlias ? "Guardando..." : "Cambiar nombre"}
+            </button>
             <button
               onClick={handleLogout}
               className="cursor-pointer w-full flex items-center gap-2 px-3 py-2 text-[11px] text-[#D14343] hover:bg-black/5 transition-colors"
@@ -200,9 +275,7 @@ export function Sidebar() {
               </div>
             ) : (
               <>
-                <div className="w-7 h-7 rounded-full bg-white text-navy flex items-center justify-center text-[10px] font-bold shadow-sm shrink-0">
-                  {user?.initial}
-                </div>
+                <UserAvatar photoUrl={user?.photoUrl ?? null} initial={user?.initial ?? "U"} />
                 <div
                   className={`flex-1 min-w-0 text-left transition-all duration-200 ease-in-out overflow-hidden ${
                     collapsed ? "max-w-0 opacity-0" : "max-w-[140px] opacity-100"
@@ -210,9 +283,6 @@ export function Sidebar() {
                 >
                   <p className="text-[10px] font-bold text-white truncate leading-tight whitespace-nowrap">
                     {user?.name}
-                  </p>
-                  <p className="text-[9px] text-white/60 truncate uppercase whitespace-nowrap">
-                    {user?.role || "Sin rol"}
                   </p>
                 </div>
               </>

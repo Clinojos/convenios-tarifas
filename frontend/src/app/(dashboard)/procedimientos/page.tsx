@@ -7,7 +7,6 @@ import { API_BASE_URL } from "@/config/api";
 import { COOKIE_NAME } from "@/config/auth";
 import { useDebouncedValue } from "@/hooks/useDebouncedValue";
 import { useBreadcrumb, useBreadcrumbNav } from "@/components/breadcrumb/BreadcrumbContext";
-import { RequirePermission } from "@/components/auth/RequirePermission";
 import { Pagination } from "@/components/ui/Pagination";
 
 type ProcedureRow = {
@@ -312,10 +311,8 @@ function ProceduresListContent() {
 
 export default function ProceduresListPage() {
   return (
-    <RequirePermission permission="procedures:view">
-      <Suspense fallback={null}>
-        <ProceduresListContent />
-      </Suspense>
-    </RequirePermission>
+    <Suspense fallback={null}>
+      <ProceduresListContent />
+    </Suspense>
   );
 }

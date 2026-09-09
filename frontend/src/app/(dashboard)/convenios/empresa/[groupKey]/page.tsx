@@ -11,7 +11,6 @@ import { CompanyCard } from "@/components/convenios/CompanyCard";
 import { EmptyState } from "@/components/convenios/EmptyState";
 import { EmpresaConveniosSkeleton } from "@/components/convenios/skeletons/ConveniosSkeletons";
 import { useBreadcrumb, useBreadcrumbNav } from "@/components/breadcrumb/BreadcrumbContext";
-import { RequirePermission } from "@/components/auth/RequirePermission";
 
 const PAGE_SIZE = 12;
 
@@ -113,10 +112,8 @@ function EmpresaConveniosContent() {
 
 export default function EmpresaConveniosPage() {
   return (
-    <RequirePermission permission="agreement:view">
-      <Suspense fallback={<EmpresaConveniosSkeleton />}>
-        <EmpresaConveniosContent />
-      </Suspense>
-    </RequirePermission>
+    <Suspense fallback={<EmpresaConveniosSkeleton />}>
+      <EmpresaConveniosContent />
+    </Suspense>
   );
 }

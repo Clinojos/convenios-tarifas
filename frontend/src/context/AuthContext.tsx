@@ -8,18 +8,16 @@ import { COOKIE_NAME } from "@/config/auth";
 
 type User = {
   id: string;
-  role: string;
   name: string;
   initial: string;
-  permissions: string[];
+  photoUrl: string | null; // 👈 nuevo
 };
 
 const defaultUser: User = {
   id: "",
-  role: "",
   name: "Usuario",
   initial: "U",
-  permissions: [],
+  photoUrl: null, // 👈 nuevo
 };
 
 type AuthContextType = {
@@ -56,12 +54,13 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         if (response.ok) {
           const data = await response.json();
           setUser({
-            id: data.sub || "",
-            role: data.role || "",
-            name: data.sub || "Usuario",
-            initial: (data.sub?.charAt(0) || "U").toUpperCase(),
-            permissions: data.permissions || [],
+            id: data.user_id || "",
+            name: data.name || "Usuario",
+            initial: data.initial || (data.name?.charAt(0) || "U").toUpperCase(),
+            photoUrl: data.photo_url || null, // 👈 nuevo
           });
+        } else {
+          console.error("Respuesta /me no OK:", response.status);
         }
       } catch (e) {
         console.error("Error cargando perfil:", e);
@@ -70,8 +69,6 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       }
     };
 
-    // Se ejecuta UNA sola vez para toda la app, sin importar
-    // cuántos componentes usen useUser() más abajo.
     loadUser();
   }, []);
 
@@ -82,8 +79,6 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   );
 }
 
-// Mismo nombre y misma forma de uso que tu hook anterior,
-// así no tienes que tocar los componentes que ya lo usan.
 export function useUser() {
   return useContext(AuthContext);
 }

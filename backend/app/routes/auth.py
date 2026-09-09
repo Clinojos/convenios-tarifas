@@ -1,71 +1,123 @@
 from fastapi import APIRouter, Depends, HTTPException, status
 from sqlmodel import Session, select
 from sqlalchemy import func
-# 1. Importamos ambas sesiones
+from datetime import datetime
+
 from ..db import get_session_hosvital, get_session_local
 from ..models.user import User
-# IMPORTANTE: Importamos los modelos locales para buscar roles/permisos
-from ..models.roles_permissions import UserRole 
+from ..models.user_profile import UserProfile
 
 from ..auth.jwt import create_access_token, get_current_user
 from ..auth.cipher import encrypt, decrypt
-# Ajusta estas funciones si es necesario para que usen la sesión local
-from ..services.auth_service import get_permissions_for_user, get_role_for_user, get_access_for_user
 from pydantic import BaseModel
 
 router = APIRouter(prefix="/api/v1/auth", tags=["auth"])
+
 
 class LoginRequest(BaseModel):
     identifier: str
     password: str
 
+
+class AliasUpdate(BaseModel):
+    display_name: str | None
+
+
 @router.post("/login")
 def login(
-    data: LoginRequest, 
-    # 2. Inyectamos las dos sesiones
+    data: LoginRequest,
     session_hosvital: Session = Depends(get_session_hosvital),
-    session_local: Session = Depends(get_session_local)
+    session_local: Session = Depends(get_session_local),
 ):
-    # Verificación en Hosvital (Remoto)
-    id_cifrado  = encrypt(data.identifier.strip())
-    psw_cifrado = encrypt(data.password.strip())
+    identifier = data.identifier.strip()
+    password = data.password.strip()
+
+    if not identifier or not password:
+        raise HTTPException(status_code=401, detail="Credenciales incorrectas")
+
+    # --- Verificación de credenciales en Hosvital (Remoto) ---
+    id_cifrado = encrypt(identifier)
+    psw_cifrado = encrypt(password)
 
     statement = select(User).where(
-        func.rtrim(User.id)       == id_cifrado,
-        func.rtrim(User.password) == psw_cifrado
+        func.rtrim(User.id) == id_cifrado,
+        func.rtrim(User.password) == psw_cifrado,
     )
     user = session_hosvital.exec(statement).first()
 
     if not user:
         raise HTTPException(status_code=401, detail="Credenciales incorrectas")
 
-    # user_id en claro
-    user_id = decrypt(user.id).strip()
+    # --- Validación de estado del usuario (AUsrEst) ---
+    is_active = (user.status or "").strip().upper() == "S"
 
-    # 3. Validamos ACCESO a la plataforma (no rol) desde la base de datos LOCAL (SQLite)
-    has_access = get_access_for_user(user_id, session_local)
-    if not has_access:
+    if not is_active:
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
-            detail="Tu cuenta no tiene acceso a la plataforma. Contacta al administrador."
+            detail="Tu usuario está inactivo. Contacta al administrador.",
         )
 
-    # 4. Obtenemos rol y permisos (pueden venir vacíos si aún no se asignó rol)
-    role_name = get_role_for_user(user_id, session_local) 
-    permissions = get_permissions_for_user(user_id, session_local)
+    # --- Datos en claro ---
+    user_id = decrypt(user.id).strip()
 
+    # Ya no hay roles ni permisos: todos los usuarios activos tienen el mismo acceso.
     token_data = {
-        "sub":         user_id,
-        "role":        role_name,      # puede ser None si aún no tiene rol
-        "permissions": permissions     # puede ser [] si aún no tiene rol
+        "sub": user_id,
     }
 
     return {"access_token": create_access_token(token_data), "token_type": "bearer"}
 
+
 @router.get("/me")
-def get_me(current_user: dict = Depends(get_current_user)):
+def get_me(
+    current_user: dict = Depends(get_current_user),
+    session_local: Session = Depends(get_session_local),
+):
     """
-    Este endpoint permite al frontend verificar la sesión actual
-    del usuario basado en su token JWT.
+    Devuelve la identidad del usuario actual: si tiene un alias
+    guardado en local (SQLite), se usa ese; si no, se usa el nombre
+    real de Hosvital. Siempre incluye el user_id crudo también.
     """
-    return current_user
+    user_id = current_user["sub"]
+
+    profile = session_local.get(UserProfile, user_id)
+
+    # TODO: reemplazar por el nombre real que traigas de Hosvital
+    # (por ahora cae al user_id si no hay alias)
+    real_name = user_id
+
+    display_name = (
+        profile.display_name if profile and profile.display_name else real_name
+    )
+
+    return {
+        "user_id": user_id,
+        "name": display_name,
+        "initial": display_name[0].upper() if display_name else "?",
+        "photo_url": profile.photo_url if profile else None,
+    }
+
+
+@router.put("/me/alias")
+def update_alias(
+    payload: AliasUpdate,
+    current_user: dict = Depends(get_current_user),
+    session_local: Session = Depends(get_session_local),
+):
+    """
+    Permite al usuario definir (o quitar, si manda null) su alias
+    visible en el sidebar.
+    """
+    user_id = current_user["sub"]
+
+    profile = session_local.get(UserProfile, user_id)
+    if not profile:
+        profile = UserProfile(user_id=user_id)
+
+    profile.display_name = payload.display_name
+    profile.updated_at = datetime.utcnow()
+
+    session_local.add(profile)
+    session_local.commit()
+
+    return {"ok": True, "display_name": profile.display_name}

@@ -6,7 +6,6 @@ import { Search, ArrowDown, ArrowUp, ArrowUpDown, Home } from "lucide-react";
 import { API_BASE_URL } from "@/config/api";
 import { COOKIE_NAME } from "@/config/auth";
 import { useBreadcrumb, useBreadcrumbNav } from "@/components/breadcrumb/BreadcrumbContext";
-import { RequirePermission } from "@/components/auth/RequirePermission";
 import {
   OfertasConvenioTable,
   formatPrice,
@@ -386,10 +385,8 @@ function ProcedureDetailContent() {
 
 export default function ProcedureDetailPage() {
   return (
-    <RequirePermission permission="procedures:view">
-      <Suspense fallback={null}>
-        <ProcedureDetailContent />
-      </Suspense>
-    </RequirePermission>
-  );
+    <Suspense fallback={null}>
+      <ProcedureDetailContent />
+    </Suspense>
+);
 }

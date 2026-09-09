@@ -197,7 +197,7 @@ function LoginContent() {
           </form>
 
           <div className="mt-10 max-w-sm w-full text-center">
-            <p className="text-[12px] font-bold text-slate-700">HOSVITAL - Gestión Interna</p>
+            <p className="text-[12px] font-bold text-slate-700">HOSVITAL - Gestión Manual de contratos</p>
             <p className="text-[11px] text-slate-400 mt-1 font-medium">© 2026 Todos los derechos reservados</p>
           </div>
         </div>

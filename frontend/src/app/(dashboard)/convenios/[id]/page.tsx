@@ -17,7 +17,6 @@ import { ConvenioDetalleSkeleton } from "@/components/convenios/skeletons/Conven
 import { useConvenioDetail } from "@/hooks/useConvenioDetail";
 import { parseObservaciones } from "@/lib/parseObservaciones";
 import { useBreadcrumb, useBreadcrumbNav } from "../../../../components/breadcrumb/BreadcrumbContext";
-import { RequirePermission } from "@/components/auth/RequirePermission";
 
 // ---------------------------------------------------------------------------
 // Pestañas
@@ -220,10 +219,8 @@ function ConvenioDetalleContent() {
 
 export default function ConvenioDetallePage() {
   return (
-    <RequirePermission permission="agreement:view">
-      <Suspense fallback={<ConvenioDetalleSkeleton />}>
-        <ConvenioDetalleContent />
-      </Suspense>
-    </RequirePermission>
+    <Suspense fallback={<ConvenioDetalleSkeleton />}>
+      <ConvenioDetalleContent />
+    </Suspense>
   );
 }

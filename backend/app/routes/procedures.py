@@ -7,7 +7,7 @@ from app.models.agreement_portfolio import AgreementPortfolio
 from app.models.portfolio import Portfolio
 from app.models.portfolio_item import PortfolioItem
 from app.models.tariff import Tariff, ProcedurePrice
-from app.auth.permissions import require_permission
+from app.auth.jwt import get_current_user
 from app.services.search_engine import apply_search_filter
 from app.services.pricing_service import (
     get_procedure_price,
@@ -34,7 +34,7 @@ def list_procedures(
     limit: int = 50,
     q: str = None,
     status: str = None,
-    _ = Depends(require_permission("procedures:view"))
+    _current_user: dict = Depends(get_current_user),
 ):
     query = select(Procedure).where(Procedure.PRCODI.isnot(None))
     query = apply_search_filter(query, Procedure, q)
@@ -83,7 +83,7 @@ def get_procedures_total(
     session: Session = Depends(get_session_hosvital),
     q: str = None,
     status: str = None,
-    _ = Depends(require_permission("procedures:view"))
+    _current_user: dict = Depends(get_current_user),
 ):
     query = select(Procedure).where(Procedure.PRCODI.isnot(None))
     query = apply_search_filter(query, Procedure, q)
@@ -102,7 +102,7 @@ def procedure_price(
     nit: str,
     proc_code: str,
     session: Session = Depends(get_session_hosvital),
-    _ = Depends(require_permission("procedures:view"))
+    _current_user: dict = Depends(get_current_user),
 ):
     result = get_procedure_price(session, nit, proc_code)
     if not result:
@@ -114,7 +114,7 @@ def procedure_price(
 def portfolios_by_contract(
     nit: str,
     session: Session = Depends(get_session_hosvital),
-    _ = Depends(require_permission("procedures:view"))
+    _current_user: dict = Depends(get_current_user),
 ):
     return get_portfolios_by_contract(session, nit)
 
@@ -126,7 +126,7 @@ def procedures_by_portfolio(
     page: int = 1,
     limit: int = 50,
     session: Session = Depends(get_session_hosvital),
-    _ = Depends(require_permission("procedures:view"))
+    _current_user: dict = Depends(get_current_user),
 ):
     return get_procedures_by_portfolio(session, portfolio_code, q, page, limit)
 
@@ -140,7 +140,7 @@ def procedures_by_portfolio(
 def get_procedure_detail(
     code: str,
     session: Session = Depends(get_session_hosvital),
-    _ = Depends(require_permission("procedures:view"))
+    _current_user: dict = Depends(get_current_user),
 ):
     code = code.strip()
 
