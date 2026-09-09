@@ -1,8 +1,9 @@
 "use client";
 
 import { useState, useEffect, useRef, useCallback, useLayoutEffect } from "react";
-import { Search, Layers, ChevronLeft, ChevronRight } from "lucide-react";
+import { Search, Layers } from "lucide-react";
 import { useTarifario } from "@/hooks/useTarifario";
+import { Pagination } from "@/components/ui/Pagination"; // ajusta la ruta según donde guardes el archivo
 
 function formatCOP(valor: number) {
   return valor.toLocaleString("es-CO", { style: "currency", currency: "COP", maximumFractionDigits: 0 });
@@ -409,29 +410,14 @@ export function TarifarioBlock({
             </table>
           </div>
 
-          <div className="mt-4 flex items-center justify-between shrink-0">
-            <p className="text-[11px] text-slate-400">
-              {total} procedimiento{total !== 1 ? "s" : ""} · página {page} de {totalPages}
-            </p>
-            <div className="flex items-center gap-1.5">
-              <button
-                onClick={() => goToPage(page - 1)}
-                disabled={page <= 1 || loadingItems}
-                className="cursor-pointer flex items-center gap-1 text-[11px] font-medium px-3 py-1.5 rounded-lg border border-slate-200 text-slate-600 disabled:opacity-40 disabled:cursor-not-allowed hover:border-slate-300 hover:text-slate-800 transition-colors"
-              >
-                <ChevronLeft size={13} />
-                Anterior
-              </button>
-              <button
-                onClick={() => goToPage(page + 1)}
-                disabled={page >= totalPages || loadingItems}
-                className="cursor-pointer flex items-center gap-1 text-[11px] font-medium px-3 py-1.5 rounded-lg border border-slate-200 text-slate-600 disabled:opacity-40 disabled:cursor-not-allowed hover:border-slate-300 hover:text-slate-800 transition-colors"
-              >
-                Siguiente
-                <ChevronRight size={13} />
-              </button>
-            </div>
-          </div>
+          <Pagination
+            page={page}
+            totalPages={totalPages}
+            onPageChange={goToPage}
+            totalItems={total}
+            itemLabel="procedimiento"
+            disabled={loadingItems}
+          />
         </>
       ) : (
         <div className="mt-6 py-10 text-center flex-1 min-h-0">

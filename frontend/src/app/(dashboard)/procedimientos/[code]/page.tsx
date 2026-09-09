@@ -373,7 +373,13 @@ function ProcedureDetailContent() {
 
       
 
-      <OfertasConvenioTable rows={rows} page={page} onPageChange={goToPage} emptyMessage={emptyTableMessage} />
+      <OfertasConvenioTable
+          rows={rows}
+          page={page}
+          onPageChange={goToPage}
+          emptyMessage={emptyTableMessage}
+          sortBy={sortBy}
+        />
     </div>
   );
 }

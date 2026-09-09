@@ -2,12 +2,13 @@
 
 import { useEffect, useState, useRef, useCallback, useLayoutEffect, Suspense } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
-import { Search, Home, ChevronLeft, ChevronRight } from "lucide-react";
+import { Search, Home } from "lucide-react";
 import { API_BASE_URL } from "@/config/api";
 import { COOKIE_NAME } from "@/config/auth";
 import { useDebouncedValue } from "@/hooks/useDebouncedValue";
 import { useBreadcrumb, useBreadcrumbNav } from "@/components/breadcrumb/BreadcrumbContext";
 import { RequirePermission } from "@/components/auth/RequirePermission";
+import { Pagination } from "@/components/ui/Pagination";
 
 type ProcedureRow = {
   code: string;
@@ -18,12 +19,11 @@ type ProcedureRow = {
 const MIN_ROWS = 5;
 const DEFAULT_ROWS = 10;
 
-// Alturas estimadas por fila/encabezado según las clases de Tailwind usadas
-// abajo (text-[12px] + py-2 en <td>, texto uppercase text-[10px] + pb-2 en
-// <thead>). Usamos constantes fijas en vez de medir la primera fila real
-// del <table>, para poder calcular rowsPerPage ANTES de tener datos y así
-// hacer un solo fetch inicial con el límite correcto (en vez de pedir con
-// DEFAULT_ROWS y luego repetir con el valor real una vez medido).
+// Estos valores son solo el ESTIMADO inicial, usado antes de tener
+// cualquier fila real en el DOM (para el fetch a ciegas y el skeleton).
+// En cuanto hay thead/fila reales, recomputeRows usa su altura real
+// (getBoundingClientRect), que es lo que corrige el corte de la última
+// fila a distintos niveles de zoom (donde el estimado fijo ya no aplica).
 const THEAD_HEIGHT_ESTIMATE = 28;
 const ROW_HEIGHT_ESTIMATE = 33;
 
@@ -43,21 +43,14 @@ function ProceduresListContent() {
   const isDebouncing = searchInput !== debouncedSearch;
 
   const [rowsPerPage, setRowsPerPage] = useState(DEFAULT_ROWS);
-  // Se vuelve true en cuanto medimos el layout por primera vez. El fetch
-  // inicial espera a esto para no pedir datos dos veces (una con
-  // DEFAULT_ROWS "a ciegas" y otra con el valor real ya medido).
   const [rowsReady, setRowsReady] = useState(false);
 
-  // IMPORTANTE: este ref se usa solo para MEDIR altura disponible. No debe
-  // tener overflow propio ni scrollbar, porque el ResizeObserver que lo
-  // observa reaccionaría a cambios de tamaño causados por su propia
-  // scrollbar horizontal (aparece/desaparece según el ancho del contenido),
-  // generando un loop infinito: menos altura -> menos filas -> tabla más
-  // corta -> desaparece la scrollbar -> más altura -> más filas -> vuelve a
-  // aparecer la scrollbar -> ... El scroll horizontal real vive en un div
-  // interno aparte (ver JSX más abajo) que no se mide.
   const tableWrapperRef = useRef<HTMLDivElement | null>(null);
   const theadRef = useRef<HTMLTableSectionElement | null>(null);
+  // NUEVO: ref a la primera fila real del tbody, para medir su altura
+  // exacta tal como se renderiza (fuente, padding, zoom, etc.) en vez de
+  // asumir ROW_HEIGHT_ESTIMATE siempre.
+  const firstRowRef = useRef<HTMLTableRowElement | null>(null);
 
   const { setListUrl, listUrl } = useBreadcrumbNav();
 
@@ -93,20 +86,19 @@ function ProceduresListContent() {
     if (!wrapper) return;
 
     const containerHeight = wrapper.clientHeight;
-    // Antes de tener datos usamos el thead estimado; una vez el thead real
-    // está en el DOM (con datos o con skeleton, ambos lo montan) tomamos su
-    // altura real si está disponible.
     const theadHeight = theadRef.current?.getBoundingClientRect().height || THEAD_HEIGHT_ESTIMATE;
+    // NUEVO: si ya hay una fila real en el DOM, usamos su altura exacta.
+    // Esto es lo que evita el desfase a distintos niveles de zoom (90%,
+    // 110%, etc.) que antes causaba que la última fila quedara cortada
+    // por el overflow-y-hidden del contenedor.
+    const rowHeight = firstRowRef.current?.getBoundingClientRect().height || ROW_HEIGHT_ESTIMATE;
 
     const available = containerHeight - theadHeight;
     if (available <= 0) return;
 
-    const nextRows = Math.max(MIN_ROWS, Math.floor(available / ROW_HEIGHT_ESTIMATE));
+    const nextRows = Math.max(MIN_ROWS, Math.floor(available / rowHeight));
 
     setRowsPerPage((prev) => {
-      // Tolerancia de ±1 fila: evita toggles infinitos causados por
-      // redondeos de 1px o por pequeñas variaciones de layout que no
-      // representan un cambio real de tamaño de la ventana/contenedor.
       if (Math.abs(prev - nextRows) <= 1) return prev;
       return nextRows;
     });
@@ -117,8 +109,6 @@ function ProceduresListContent() {
     const wrapper = tableWrapperRef.current;
     if (!wrapper) return;
 
-    // Medición inicial inmediata (sin debounce) para que el primer fetch
-    // ya salga con el rowsPerPage correcto.
     recomputeRows();
 
     let frame: number;
@@ -157,6 +147,18 @@ function ProceduresListContent() {
       mql?.removeEventListener("change", handleZoomChange);
     };
   }, [recomputeRows]);
+
+  // NUEVO: en cuanto llegan filas reales (no skeleton) al DOM, volvemos a
+  // medir en el siguiente frame. La primera vez que se calculó
+  // rowsPerPage no había ninguna fila real todavía, así que se usó el
+  // estimado; esta segunda pasada corrige con la altura real ya pintada
+  // (esto es lo que arregla el corte al 90% de zoom u otros valores donde
+  // el estimado fijo no coincide con el alto real de la fila).
+  useEffect(() => {
+    if (rows.length === 0) return;
+    const frame = requestAnimationFrame(recomputeRows);
+    return () => cancelAnimationFrame(frame);
+  }, [rows, recomputeRows]);
 
   function fetchProcedures(targetPage: number, search: string, limit: number) {
     setLoading(true);
@@ -202,8 +204,6 @@ function ProceduresListContent() {
   }, [debouncedSearch]);
 
   useEffect(() => {
-    // Espera a la primera medición de layout para no disparar un fetch
-    // "a ciegas" con DEFAULT_ROWS y luego repetirlo con el valor real.
     if (!rowsReady) return;
     fetchProcedures(page, searchParams.get("q") || "", rowsPerPage);
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -211,11 +211,6 @@ function ProceduresListContent() {
 
   const totalPages = Math.max(1, Math.ceil(total / rowsPerPage));
   const isLoading = loading || isDebouncing || !rowsReady;
-  // Skeleton de página completa SOLO quiando aún no hay ninguna fila en
-  // pantalla (primera carga real). Si ya había datos (cambio de página,
-  // búsqueda, o el ajuste automático de rowsPerPage), preferimos mantener
-  // la tabla visible y solo atenuarla, para evitar el parpadeo de
-  // tabla -> skeleton -> tabla en cada fetch.
   const showFullSkeleton = isLoading && rows.length === 0;
   const showStaleOverlay = isLoading && rows.length > 0;
 
@@ -248,14 +243,14 @@ function ProceduresListContent() {
 
         {error && <p className="mt-3 text-[12px] text-red-500 shrink-0">Error al cargar los procedimientos.</p>}
 
-        {/* Este div SOLO se usa para medir la altura disponible (ResizeObserver).
-            No tiene overflow propio: por eso "overflow-hidden" en vez de
-            "overflow-x-auto". El scroll horizontal real vive en el div hijo
-            de abajo, para que la scrollbar horizontal (que aparece/desaparece
-            según el ancho del contenido) no altere el clientHeight de este
-            wrapper y dispare un loop infinito de recálculo -> fetch. */}
-        <div ref={tableWrapperRef} className="mt-3 flex-1 min-h-0 overflow-hidden">
-          <div className="h-full overflow-x-auto overflow-y-hidden">
+        <div className="mt-3 flex-1 min-h-0 overflow-hidden relative">
+          <div
+            ref={tableWrapperRef}
+            className="absolute inset-0 invisible pointer-events-none"
+            aria-hidden="true"
+          />
+
+          <div className="max-h-full overflow-x-auto overflow-y-hidden">
             {showFullSkeleton ? (
               <div className="space-y-2">
                 {Array.from({ length: rowsPerPage }).map((_, i) => (
@@ -272,21 +267,18 @@ function ProceduresListContent() {
                   <tr className="text-left text-slate-400 text-[10px] uppercase tracking-wide">
                     <th className="font-medium pb-2 w-28">Código CUPS</th>
                     <th className="font-medium pb-2">Nombre del procedimiento</th>
-                    <th className="font-medium pb-2 text-right w-24">Convenios</th>
                   </tr>
                 </thead>
                 <tbody>
-                  {rows.map((proc) => (
+                  {rows.map((proc, i) => (
                     <tr
                       key={proc.code}
+                      ref={i === 0 ? firstRowRef : undefined}
                       onClick={() => router.push(`/procedimientos/${proc.code}`)}
                       className="cursor-pointer border-t border-slate-50 hover:bg-slate-50 transition-colors"
                     >
                       <td className="py-2 text-navy font-medium">{proc.code}</td>
                       <td className="py-2 text-slate-700 truncate max-w-0">{proc.name}</td>
-                      <td className="py-2 text-right text-slate-500 font-medium">
-                        {proc.total_offers ?? "—"}
-                      </td>
                     </tr>
                   ))}
                 </tbody>
@@ -304,29 +296,14 @@ function ProceduresListContent() {
         </div>
 
         {(!isLoading || showStaleOverlay) && rows.length > 0 && (
-          <div className="mt-4 flex items-center justify-between shrink-0">
-            <p className="text-[11px] text-slate-400">
-              {total} procedimiento{total !== 1 ? "s" : ""} · página {page} de {totalPages}
-            </p>
-            <div className="flex items-center gap-1.5">
-              <button
-                onClick={() => goToPage(page - 1)}
-                disabled={page <= 1 || loading}
-                className="cursor-pointer flex items-center gap-1 text-[11px] font-medium px-3 py-1.5 rounded-lg border border-slate-200 text-slate-600 disabled:opacity-40 disabled:cursor-not-allowed hover:border-slate-300 hover:text-slate-800 transition-colors"
-              >
-                <ChevronLeft size={13} />
-                Anterior
-              </button>
-              <button
-                onClick={() => goToPage(page + 1)}
-                disabled={page >= totalPages || loading}
-                className="cursor-pointer flex items-center gap-1 text-[11px] font-medium px-3 py-1.5 rounded-lg border border-slate-200 text-slate-600 disabled:opacity-40 disabled:cursor-not-allowed hover:border-slate-300 hover:text-slate-800 transition-colors"
-              >
-                Siguiente
-                <ChevronRight size={13} />
-              </button>
-            </div>
-          </div>
+          <Pagination
+            page={page}
+            totalPages={totalPages}
+            onPageChange={goToPage}
+            totalItems={total}
+            itemLabel="procedimiento"
+            disabled={loading}
+          />
         )}
       </div>
     </div>
