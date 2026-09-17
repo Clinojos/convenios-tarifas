@@ -6,7 +6,7 @@ import Image from "next/image";
 import { usePathname } from "next/navigation";
 import {
   LayoutDashboard, Building2, Stethoscope,
-  LogOut, PanelLeft, Pencil
+  LogOut, PanelLeft, Pencil, ChevronUp
 } from "lucide-react";
 import { useUser } from "@/context/AuthContext";
 import { useGlobalLoading } from "@/context/LoadingContext";
@@ -25,40 +25,168 @@ const navItems = [
 const COLLAPSED_WIDTH = "w-12"; // 48px
 const EXPANDED_WIDTH = "w-[200px]";
 
+// Foto de perfil por defecto (estilo "avatar genérico" cuando el usuario no tiene foto propia)
+// Colocar el archivo en /public/avatar.png
+const DEFAULT_AVATAR_URL = "/avatar.png";
+
 function isNavItemActive(pathname: string, href: string) {
   if (href === "/") return pathname === "/";
   return pathname === href || pathname.startsWith(`${href}/`);
 }
 
-// Avatar reutilizable: muestra la foto si existe, si no, el inicial.
+// Avatar reutilizable: foto propia -> imagen genérica por defecto -> inicial (como WhatsApp)
 function UserAvatar({
   photoUrl,
   initial,
   size = "w-7 h-7",
+  textSize = "text-[10px]",
+  ring,
 }: {
   photoUrl: string | null;
   initial: string;
   size?: string;
+  textSize?: string;
+  ring?: string;
 }) {
-  const [imgError, setImgError] = useState(false);
+  const [defaultFailed, setDefaultFailed] = useState(false);
+  const [customFailed, setCustomFailed] = useState(false);
 
-  if (photoUrl && !imgError) {
+  const src = photoUrl && !customFailed ? photoUrl : DEFAULT_AVATAR_URL;
+  const showImage = !(photoUrl ? customFailed : defaultFailed) || (photoUrl && !customFailed);
+
+  // Si la foto del usuario falla, intentamos con la genérica.
+  // Si la genérica también falla (o no hay foto y la genérica falla), mostramos la inicial.
+  const handleError = () => {
+    if (photoUrl && !customFailed) {
+      setCustomFailed(true);
+    } else {
+      setDefaultFailed(true);
+    }
+  };
+
+  const fallbackToInitial = photoUrl ? customFailed && defaultFailed : defaultFailed;
+
+  if (!fallbackToInitial) {
     return (
-      // eslint-disable-next-line @next/next/no-img-element
-      <img
-        src={photoUrl}
-        alt="Foto de perfil"
-        className={`${size} rounded-full object-cover shrink-0 shadow-sm`}
-        onError={() => setImgError(true)}
-      />
+      // Contenedor circular: recorta a círculo pero deja que la imagen
+      // (aunque sea rectangular) se vea completa gracias a object-contain.
+      <div
+        className={`${size} rounded-full overflow-hidden shrink-0 shadow-sm bg-white flex items-center justify-center ${ring ?? ""}`}
+      >
+        {/* eslint-disable-next-line @next/next/no-img-element */}
+        <img
+          src={src}
+          alt="Foto de perfil"
+          className="w-full h-full object-contain"
+          onError={handleError}
+        />
+      </div>
     );
   }
 
   return (
     <div
-      className={`${size} rounded-full bg-white text-navy flex items-center justify-center text-[10px] font-bold shadow-sm shrink-0`}
+      className={`${size} rounded-full bg-white text-navy flex items-center justify-center ${textSize} font-bold shadow-sm shrink-0 ${ring ?? ""}`}
     >
       {initial}
+    </div>
+  );
+}
+
+// Modal reutilizable para cambiar el nombre (alias)
+function ChangeAliasModal({
+  isOpen,
+  currentName,
+  saving,
+  onClose,
+  onSave,
+}: {
+  isOpen: boolean;
+  currentName: string;
+  saving: boolean;
+  onClose: () => void;
+  onSave: (newName: string) => void;
+}) {
+  const [value, setValue] = useState(currentName);
+  const inputRef = useRef<HTMLInputElement>(null);
+
+  useEffect(() => {
+    if (isOpen) {
+      setValue(currentName);
+      setTimeout(() => inputRef.current?.focus(), 50);
+    }
+  }, [isOpen, currentName]);
+
+  useEffect(() => {
+    function handleKeyDown(e: KeyboardEvent) {
+      if (e.key === "Escape") onClose();
+    }
+    if (isOpen) document.addEventListener("keydown", handleKeyDown);
+    return () => document.removeEventListener("keydown", handleKeyDown);
+  }, [isOpen, onClose]);
+
+  if (!isOpen) return null;
+
+  const handleSubmit = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!saving) onSave(value.trim());
+  };
+
+  return (
+    <div
+      className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-[2px] px-4"
+      onMouseDown={(e) => {
+        if (e.target === e.currentTarget) onClose();
+      }}
+    >
+      <div className="w-full max-w-sm rounded-2xl bg-white shadow-2xl p-6 animate-modal-pop">
+        <div className="flex flex-col items-start gap-3 mb-4">
+          <div className="w-11 h-11 rounded-xl bg-primary/10 flex items-center justify-center">
+            <Pencil className="w-5 h-5 text-primary" />
+          </div>
+          <div>
+            <h2 className="text-[15px] font-bold text-[#1E1E1E]">
+              Cambiar nombre
+            </h2>
+            <p className="text-[12px] text-[#6B7280] mt-0.5">
+              Elige cómo quieres que aparezca tu nombre en la plataforma.
+            </p>
+          </div>
+        </div>
+
+        <form onSubmit={handleSubmit}>
+          <label className="block text-[11px] font-semibold text-[#374151] mb-1.5">
+            Nombre para mostrar
+          </label>
+          <input
+            ref={inputRef}
+            type="text"
+            value={value}
+            onChange={(e) => setValue(e.target.value)}
+            placeholder="Escribe tu nombre"
+            maxLength={60}
+            className="w-full rounded-lg border border-[#D1D5DB] px-3 py-2.5 text-[13px] text-[#1E1E1E] outline-none focus:border-primary focus:ring-2 focus:ring-primary/20 transition-all"
+          />
+
+          <div className="flex gap-2 mt-5">
+            <button
+              type="button"
+              onClick={onClose}
+              disabled={saving}
+              className="cursor-pointer flex-1 rounded-lg border border-[#D1D5DB] py-2.5 text-[13px] font-semibold text-[#374151] hover:bg-black/5 transition-colors disabled:opacity-50"
+            >
+              Cancelar
+            </button>
+            <button
+              type="submit"
+              disabled={saving}
+              className="cursor-pointer flex-1 rounded-lg bg-primary py-2.5 text-[13px] font-bold text-white hover:opacity-90 transition-opacity disabled:opacity-50"
+            >
+              {saving ? "Guardando..." : "Guardar"}
+            </button>
+          </div>
+        </form>
+      </div>
     </div>
   );
 }
@@ -69,6 +197,7 @@ export function Sidebar() {
   const [collapsed, setCollapsed] = useState(false);
   const [menuOpen, setMenuOpen] = useState(false);
   const [savingAlias, setSavingAlias] = useState(false);
+  const [aliasModalOpen, setAliasModalOpen] = useState(false);
   const menuRef = useRef<HTMLDivElement>(null);
   const pathname = usePathname();
   const { user, loading: userLoading } = useUser();
@@ -105,20 +234,16 @@ export function Sidebar() {
       ?.split("=")[1];
   };
 
-  const handleChangeAlias = async () => {
-    const newAlias = window.prompt(
-      "¿Cómo quieres que aparezca tu nombre?",
-      user?.name ?? ""
-    );
+  const handleOpenAliasModal = () => {
+    setMenuOpen(false);
+    setAliasModalOpen(true);
+  };
 
-    if (newAlias === null) return; // el usuario canceló
-
-    const trimmed = newAlias.trim();
+  const handleSaveAlias = async (newAlias: string) => {
     const token = getToken();
     if (!token) return;
 
     setSavingAlias(true);
-    setMenuOpen(false);
 
     try {
       const response = await fetch(`${API_BASE_URL}${ENDPOINTS.AUTH.ME_ALIAS}`, {
@@ -127,17 +252,17 @@ export function Sidebar() {
           "Content-Type": "application/json",
           Authorization: `Bearer ${token}`,
         },
-        body: JSON.stringify({ display_name: trimmed || null }),
+        body: JSON.stringify({ display_name: newAlias || null }),
       });
 
       if (response.ok) {
         window.location.reload();
       } else {
         console.error("No se pudo actualizar el alias:", response.status);
+        setSavingAlias(false);
       }
     } catch (e) {
       console.error("Error actualizando alias:", e);
-    } finally {
       setSavingAlias(false);
     }
   };
@@ -230,29 +355,40 @@ export function Sidebar() {
       <div ref={menuRef} className="relative z-10 border-t border-white/15">
         {menuOpen && (
           <div
-            className={`absolute bottom-full mb-1 bg-white rounded-lg shadow-xl border border-black/5 py-1 z-20 ${
-              collapsed ? "left-1.5 w-44" : "left-2 right-2"
+            className={`absolute bottom-full mb-2 bg-white rounded-xl shadow-xl border border-black/5 overflow-hidden z-20 animate-menu-pop origin-bottom ${
+              collapsed ? "left-1.5 w-48" : "left-2 right-2"
             }`}
           >
-            <div className="px-3 py-2 border-b border-black/5 flex items-center gap-2">
-              <UserAvatar photoUrl={user?.photoUrl ?? null} initial={user?.initial ?? "U"} size="w-6 h-6" />
-              <p className="text-[11px] font-semibold text-[#1E1E1E] truncate">{user?.name}</p>
+            {/* Encabezado con degradado igual al sidebar, para que combine */}
+            <div className="bg-gradient-to-br from-primary to-navy px-3 py-4 flex flex-col items-center gap-2">
+              <UserAvatar
+                photoUrl={user?.photoUrl ?? null}
+                initial={user?.initial ?? "U"}
+                size="w-16 h-16"
+                textSize="text-lg"
+                ring="ring-2 ring-white/40"
+              />
+              <p className="text-[12px] font-semibold text-white truncate text-center max-w-full">
+                {user?.name}
+              </p>
             </div>
-            <button
-              onClick={handleChangeAlias}
-              disabled={savingAlias}
-              className="cursor-pointer w-full flex items-center gap-2 px-3 py-2 text-[11px] text-[#1E1E1E] hover:bg-black/5 transition-colors disabled:opacity-50"
-            >
-              <Pencil className="w-3.5 h-3.5" />
-              {savingAlias ? "Guardando..." : "Cambiar nombre"}
-            </button>
-            <button
-              onClick={handleLogout}
-              className="cursor-pointer w-full flex items-center gap-2 px-3 py-2 text-[11px] text-[#D14343] hover:bg-black/5 transition-colors"
-            >
-              <LogOut className="w-3.5 h-3.5" />
-              Cerrar sesión
-            </button>
+
+            <div className="py-1.5">
+              <button
+                onClick={handleOpenAliasModal}
+                className="cursor-pointer w-full flex items-center gap-2.5 px-4 py-2.5 text-[12px] font-medium text-[#374151] hover:bg-[#F3F4F6] transition-colors"
+              >
+                <Pencil className="w-3.5 h-3.5 text-primary" />
+                Cambiar nombre
+              </button>
+              <button
+                onClick={handleLogout}
+                className="cursor-pointer w-full flex items-center gap-2.5 px-4 py-2.5 text-[12px] font-medium text-[#374151] hover:bg-[#F3F4F6] transition-colors"
+              >
+                <LogOut className="w-3.5 h-3.5 text-navy" />
+                Cerrar sesión
+              </button>
+            </div>
           </div>
         )}
 
@@ -277,13 +413,18 @@ export function Sidebar() {
               <>
                 <UserAvatar photoUrl={user?.photoUrl ?? null} initial={user?.initial ?? "U"} />
                 <div
-                  className={`flex-1 min-w-0 text-left transition-all duration-200 ease-in-out overflow-hidden ${
+                  className={`flex-1 min-w-0 flex items-center justify-between gap-1 text-left transition-all duration-200 ease-in-out overflow-hidden ${
                     collapsed ? "max-w-0 opacity-0" : "max-w-[140px] opacity-100"
                   }`}
                 >
                   <p className="text-[10px] font-bold text-white truncate leading-tight whitespace-nowrap">
                     {user?.name}
                   </p>
+                  <ChevronUp
+                    className={`w-3 h-3 text-white/70 shrink-0 transition-transform duration-200 ${
+                      menuOpen ? "" : "rotate-180"
+                    }`}
+                  />
                 </div>
               </>
             )}
@@ -297,6 +438,16 @@ export function Sidebar() {
           )}
         </div>
       </div>
+
+      <ChangeAliasModal
+        isOpen={aliasModalOpen}
+        currentName={user?.name ?? ""}
+        saving={savingAlias}
+        onClose={() => {
+          if (!savingAlias) setAliasModalOpen(false);
+        }}
+        onSave={handleSaveAlias}
+      />
     </aside>
   );
 }

@@ -54,7 +54,7 @@ def login(
     if not is_active:
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
-            detail="Tu usuario está inactivo. Contacta al administrador.",
+            detail="Tu usuario está inactivo",
         )
 
     # --- Datos en claro ---

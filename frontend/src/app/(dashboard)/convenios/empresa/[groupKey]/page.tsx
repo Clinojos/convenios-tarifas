@@ -52,7 +52,7 @@ function EmpresaConveniosContent() {
   // Se actualiza solo cuando llega el nombre real (antes de eso muestra el
   // fallback "Empresa").
   useBreadcrumb([
-    { id: "home", label: "Inicio", icon: Home, onClick: () => router.push(listUrl) },
+    { id: "home", label: "Inicio", icon: Home, onClick: () => router.push(listUrl || "/convenios") },
     { id: "empresa", label: displayName, icon: Building2 },
   ]);
 

@@ -146,26 +146,41 @@ function ConvenioDetalleContent() {
   const activeTabLabel = TABS.find((t) => t.id === activeTab)?.label ?? "";
 
   useBreadcrumb(
-    convenio
-      ? [
-          { id: "home", label: "Inicio", icon: Home, onClick: () => router.push(listUrl) },
-          ...(companyName && companyName !== convenio.name
-            ? [
-                {
-                  id: "empresa",
-                  label: companyName,
-                  icon: Building2,
-                  onClick: groupKey
-                    ? () => router.push(savedEmpresaUrl ?? `/convenios/empresa/${encodeURIComponent(groupKey)}`)
-                    : undefined,
-                },
-              ]
-            : []),
-          { id: "convenio", label: convenio.name, icon: Briefcase },
-          { id: "tab", label: activeTabLabel },
-        ]
-      : [{ id: "home", label: "Inicio", icon: Home, onClick: () => router.push(listUrl) }]
-  );
+  convenio
+    ? [
+        {
+          id: "home",
+          label: "Inicio",
+          icon: Home,
+          onClick: () => router.push(listUrl || "/convenios"), // ← fallback
+        },
+        ...(companyName && companyName !== convenio.name
+          ? [
+              {
+                id: "empresa",
+                label: companyName,
+                icon: Building2,
+                onClick: groupKey
+                  ? () =>
+                      router.push(
+                        savedEmpresaUrl ?? `/convenios/empresa/${encodeURIComponent(groupKey)}`
+                      ) // este ya tenía fallback, queda igual
+                  : undefined,
+              },
+            ]
+          : []),
+        { id: "convenio", label: convenio.name, icon: Briefcase },
+        { id: "tab", label: activeTabLabel },
+      ]
+    : [
+        {
+          id: "home",
+          label: "Inicio",
+          icon: Home,
+          onClick: () => router.push(listUrl || "/convenios"), // ← fallback
+        },
+      ]
+);
 
   if (loading) {
     return <ConvenioDetalleSkeleton />;
