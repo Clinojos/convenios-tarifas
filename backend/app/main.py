@@ -9,7 +9,7 @@ from .db import init_db  # Importamos la función de inicialización
 # SQLModel los registre en local_metadata ANTES de llamar a init_db().
 # Si un modelo nuevo no se importa aquí (o en algún módulo que sí se importe),
 # su tabla nunca se crea, aunque el archivo del modelo exista.
-from .models import user_profile  # noqa: F401
+from .models import user_profile, procedure_visit, agreement_visit  # noqa: F401
 
 # Inicializamos la app
 app = FastAPI(title="Hosvital API", version="1.0.0")

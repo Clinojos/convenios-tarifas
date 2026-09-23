@@ -264,17 +264,23 @@ def list_agreement_groups(
         total_procedures = sum(procedures_map.get(str(a.MENNIT).strip(), 0) for a in items)
         display_name = h["sort_name"]
 
-        matched_variant_names = []
+        matched_variants = []
         if q_lower:
             for a in items:
                 variant_name = str(a.MENOMB).strip() if a.MENOMB is not None else ""
-                if q_lower in variant_name.lower() and variant_name.lower() != display_name.lower():
-                    matched_variant_names.append(variant_name)
+                variant_key = str(a.MENNIT).strip() if a.MENNIT is not None else ""
+                name_match = q_lower in variant_name.lower() and variant_name.lower() != display_name.lower()
+                key_match = q_lower in variant_key.lower()
+                if name_match or key_match:
+                    matched_variants.append({
+                        "contract_key": variant_key,
+                        "name": variant_name,
+                    })
 
         output.append({
             "group_key": key,
             "display_name": display_name,
-            "matched_variant_names": matched_variant_names,
+            "matched_variants": matched_variants,
             "status": "Activo" if any_active else "Inactivo",
             "active_variants": h["active_variants"],
             "total_variants": len(items),

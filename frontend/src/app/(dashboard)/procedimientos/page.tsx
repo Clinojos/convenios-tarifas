@@ -8,6 +8,7 @@ import { COOKIE_NAME } from "@/config/auth";
 import { useDebouncedValue } from "@/hooks/useDebouncedValue";
 import { useBreadcrumb, useBreadcrumbNav } from "@/components/breadcrumb/BreadcrumbContext";
 import { Pagination } from "@/components/ui/Pagination";
+import { registerProcedureVisit } from "@/hooks/useTopProcedures";
 
 type ProcedureRow = {
   code: string;
@@ -218,6 +219,15 @@ function ProceduresListContent() {
     setPageInUrl(newPage);
   };
 
+  // NUEVO: registra la visita al procedimiento (para el ranking de
+  // "Procedimientos más consultados" del dashboard) y recién después
+  // navega al detalle. Fire-and-forget, igual que registerConvenioVisit:
+  // si el POST falla no bloquea ni retrasa la navegación.
+  const openProcedure = (code: string) => {
+    registerProcedureVisit(code);
+    router.push(`/procedimientos/${code}`);
+  };
+
   return (
     <div className="flex h-full flex-col gap-4">
       <div>
@@ -273,7 +283,7 @@ function ProceduresListContent() {
                     <tr
                       key={proc.code}
                       ref={i === 0 ? firstRowRef : undefined}
-                      onClick={() => router.push(`/procedimientos/${proc.code}`)}
+                      onClick={() => openProcedure(proc.code)}
                       className="cursor-pointer border-t border-slate-50 hover:bg-slate-50 transition-colors"
                     >
                       <td className="py-2 text-navy font-medium">{proc.code}</td>

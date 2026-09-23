@@ -40,13 +40,34 @@ if not os.path.exists("./Database"):
 SQLITE_URL = "sqlite:///./Database/app_control.db"
 engine_local = create_engine(SQLITE_URL, connect_args={"check_same_thread": False}, echo=SQL_ECHO)
 
+
 def init_db():
-    pass
+    """
+    Crea únicamente las tablas LOCALES (SQLite) que aún no existan.
+
+    SQLModel.metadata es compartida entre los modelos de Hosvital (SQL Server,
+    schema="dbo") y los modelos locales. Si llamamos a create_all() sin filtrar,
+    SQLAlchemy intenta crear también las tablas de Hosvital dentro de SQLite,
+    lo cual falla porque SQLite no reconoce el schema "dbo".
+
+    Por eso filtramos: solo se crean las tablas cuyo `schema` es None, es decir,
+    las que NO pertenecen a Hosvital.
+
+    IMPORTANTE: para que un modelo se cree aquí, su módulo debe haber sido
+    importado antes de llamar a esta función (ver imports en main.py).
+    """
+    local_tables = [
+        table for table in SQLModel.metadata.sorted_tables
+        if table.schema is None
+    ]
+    SQLModel.metadata.create_all(engine_local, tables=local_tables)
+
 
 # 3. Sesiones
 def get_session_hosvital():
     with Session(engine_hosvital) as session:
         yield session
+
 
 def get_session_local():
     with Session(engine_local) as session:

@@ -32,6 +32,7 @@ export function ConvenioCard({ convenio: g, index: i, onOpen }: ConvenioCardProp
   const hasInnerMatch = matches.length > 0;
   const visibleMatches = expanded ? matches : matches.slice(0, 2);
   const extraCount = matches.length - visibleMatches.length;
+  const hasExtraContent = hasInnerMatch || sinTarifario || pendienteDigitacion;
 
   return (
     <div
@@ -41,7 +42,7 @@ export function ConvenioCard({ convenio: g, index: i, onOpen }: ConvenioCardProp
       onKeyDown={(e) => {
         if (e.key === "Enter" || e.key === " ") onOpen(g);
       }}
-      className="group h-full flex flex-col bg-white border border-slate-100 p-4 rounded-2xl hover:border-primary/20 hover:shadow-md hover:-translate-y-0.5 transition-all duration-200 cursor-pointer"
+      className="group min-h-[132px] flex flex-col bg-white border border-slate-100 p-4 rounded-2xl hover:border-primary/20 hover:shadow-md hover:-translate-y-0.5 transition-all duration-200 cursor-pointer"
     >
       <div className="flex items-start gap-3">
         <div
@@ -73,63 +74,68 @@ export function ConvenioCard({ convenio: g, index: i, onOpen }: ConvenioCardProp
         </span>
       </div>
 
-      {/* Convenios internos que matchearon la búsqueda: tags compactos,
-          solo ícono + nombre, sin texto explicativo. Máximo 2 visibles;
-          el resto se despliega con el botón "+N". */}
-      {hasInnerMatch && (
-        <div className="mt-2.5 flex flex-wrap items-center gap-1.5">
-          {visibleMatches.map((name, idx) => (
-            <span
-              key={`${name}-${idx}`}
-              title={name}
-              className="max-w-full flex items-center gap-1.5 text-[11px] font-medium pl-1.5 pr-2.5 py-1 rounded-full bg-primary/5 text-primary-dark border border-primary/10"
-            >
-              <FileText size={11} className="text-primary shrink-0" />
-              <span className="truncate">{name}</span>
-            </span>
-          ))}
+      {/* Tags de convenios internos que matchearon la búsqueda + alerta de
+          tarifario. Ya NO están dentro de un flex-1 con overflow-hidden:
+          ahora ocupan el espacio que realmente necesitan, así el texto de
+          cada tag nunca se corta, sin importar cuántas líneas ocupe. */}
+      {hasExtraContent && (
+        <div className="mt-2.5 flex flex-col gap-1.5">
+          {hasInnerMatch && (
+            <div className="flex flex-wrap items-center gap-1.5">
+              {visibleMatches.map((name, idx) => (
+                <span
+                  key={`${name}-${idx}`}
+                  title={name}
+                  className="max-w-full flex items-center gap-1.5 text-[11px] font-medium pl-1.5 pr-2.5 py-1 rounded-full bg-primary/5 text-primary-dark border border-primary/10"
+                >
+                  <FileText size={11} className="text-primary shrink-0" />
+                  <span className="truncate">{name}</span>
+                </span>
+              ))}
 
-          {extraCount > 0 && (
-            <button
-              type="button"
-              onClick={(e) => {
-                e.stopPropagation();
-                setExpanded((v) => !v);
-              }}
-              className="flex items-center gap-0.5 text-[10.5px] font-semibold text-primary hover:text-primary-dark px-2 py-1 rounded-full bg-primary/5 border border-primary/10 hover:border-primary/30 transition-colors shrink-0"
-            >
-              +{extraCount}
-            </button>
+              {extraCount > 0 && (
+                <button
+                  type="button"
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    setExpanded((v) => !v);
+                  }}
+                  className="flex items-center gap-0.5 text-[10.5px] font-semibold text-primary hover:text-primary-dark px-2 py-1 rounded-full bg-primary/5 border border-primary/10 hover:border-primary/30 transition-colors shrink-0"
+                >
+                  +{extraCount}
+                </button>
+              )}
+
+              {expanded && matches.length > 2 && (
+                <button
+                  type="button"
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    setExpanded(false);
+                  }}
+                  className="flex items-center gap-0.5 text-[10.5px] font-semibold text-slate-400 hover:text-slate-600 px-1"
+                >
+                  <ChevronUp size={12} />
+                </button>
+              )}
+            </div>
           )}
 
-          {expanded && matches.length > 2 && (
-            <button
-              type="button"
-              onClick={(e) => {
-                e.stopPropagation();
-                setExpanded(false);
-              }}
-              className="flex items-center gap-0.5 text-[10.5px] font-semibold text-slate-400 hover:text-slate-600 px-1"
+          {(sinTarifario || pendienteDigitacion) && (
+            <div
+              className={`flex items-center gap-1.5 text-[11px] font-medium px-2.5 py-1.5 rounded-lg ${
+                sinTarifario ? "bg-red-50 text-red-600" : "bg-amber-50 text-amber-600"
+              }`}
             >
-              <ChevronUp size={12} />
-            </button>
+              {sinTarifario ? <AlertTriangle size={12} className="shrink-0" /> : <ImageOff size={12} className="shrink-0" />}
+              <span>{sinTarifario ? "Sin tarifario cargado" : "Pendiente de digitación"}</span>
+            </div>
           )}
-        </div>
-      )}
-
-      {(sinTarifario || pendienteDigitacion) && (
-        <div
-          className={`mt-2.5 flex items-center gap-1.5 text-[11px] font-medium px-2.5 py-1.5 rounded-lg ${
-            sinTarifario ? "bg-red-50 text-red-600" : "bg-amber-50 text-amber-600"
-          }`}
-        >
-          {sinTarifario ? <AlertTriangle size={12} className="shrink-0" /> : <ImageOff size={12} className="shrink-0" />}
-          <span>{sinTarifario ? "Sin tarifario cargado" : "Pendiente de digitación"}</span>
         </div>
       )}
 
       {g.vigencia_fin && (
-        <div className="mt-2.5 flex items-center gap-1.5 text-[11px] text-slate-400">
+        <div className="mt-auto pt-2.5 flex items-center gap-1.5 text-[11px] text-slate-400 shrink-0">
           <Calendar size={11} className="shrink-0" />
           <span>
             Vence{" "}
@@ -141,23 +147,6 @@ export function ConvenioCard({ convenio: g, index: i, onOpen }: ConvenioCardProp
           </span>
         </div>
       )}
-
-      <div className="mt-auto pt-3 border-t border-slate-50 flex items-center gap-1.5 text-[12px] text-slate-600 font-medium">
-        {esDescuento ? (
-          <>
-            <Percent size={13} className="text-primary/60 shrink-0" />
-            <span>
-              {g.descuento_porcentaje != null ? `${g.descuento_porcentaje}% dto.` : "Descuento"}
-              {g.descuento_aplica_sobre ? ` sobre ${g.descuento_aplica_sobre}` : ""}
-            </span>
-          </>
-        ) : (
-          <>
-            <FileBarChart size={13} className="text-primary/60 shrink-0" />
-            <span>{(g.total_procedures ?? 0).toLocaleString()} procedimientos tarifados</span>
-          </>
-        )}
-      </div>
     </div>
   );
 }

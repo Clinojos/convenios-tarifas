@@ -1,7 +1,8 @@
 from fastapi import APIRouter, Depends, HTTPException
 from sqlmodel import Session, select, func
-from ..db import get_session_hosvital
+from ..db import get_session_hosvital, get_session_local
 from app.models.procedure import Procedure
+from app.models.procedure_visit import ProcedureVisit
 from app.models.agreement import Agreement
 from app.models.agreement_portfolio import AgreementPortfolio
 from app.models.portfolio import Portfolio
@@ -131,11 +132,67 @@ def procedures_by_portfolio(
     return get_procedures_by_portfolio(session, portfolio_code, q, page, limit)
 
 
+# ---------------------------------------------------------------------------
+# Tracking de visitas — "Procedimientos más consultados" del dashboard
+# Igual que en agreements.py: van ANTES de "/{code}" porque esa ruta es un
+# comodín de un segmento y debe quedar siempre al final del archivo (si no,
+# FastAPI matchearía "/top-consultados" o "/{code}/visit" como code=... ).
+# ---------------------------------------------------------------------------
+
+@router.post("/{code}/visit")
+def register_procedure_visit(
+    code: str,
+    session: Session = Depends(get_session_hosvital),
+    local_session: Session = Depends(get_session_local),
+    _current_user: dict = Depends(get_current_user),
+):
+    code = code.strip()
+
+    procedure = session.exec(
+        select(Procedure).where(_trimmed(Procedure.PRCODI) == code)
+    ).first()
+    procedure_name = str(procedure.PrNomb).strip() if procedure else None
+
+    local_session.add(ProcedureVisit(procedure_code=code, procedure_name=procedure_name))
+    local_session.commit()
+
+    return {"ok": True}
+
+
+@router.get("/top-consultados")
+def get_top_consulted_procedures(
+    local_session: Session = Depends(get_session_local),
+    limit: int = 5,
+    _current_user: dict = Depends(get_current_user),
+):
+    rows = local_session.exec(
+        select(
+            ProcedureVisit.procedure_code,
+            func.max(ProcedureVisit.procedure_name).label("procedure_name"),
+            func.count().label("visits"),
+        )
+        .group_by(ProcedureVisit.procedure_code)
+        .order_by(func.count().desc())
+        .limit(limit)
+    ).all()
+
+    output = [
+        {
+            "code": code,
+            "name": name or code,
+            "visits": visits,
+        }
+        for code, name, visits in rows
+    ]
+
+    return {"data": output}
+
+
 # IMPORTANTE: esta ruta va SIEMPRE AL FINAL del archivo.
 # "/{code}" es un comodin de un segmento: si se declara antes que las
-# rutas literales de arriba (/total, /price, /portfolios, /by-portfolio),
-# FastAPI matchea por orden de registro y "/total" terminaria entrando
-# aca como code="total" en vez de llegar a get_procedures_total.
+# rutas literales de arriba (/total, /price, /portfolios, /by-portfolio,
+# /top-consultados, /{code}/visit), FastAPI matchea por orden de registro
+# y esas rutas terminarian entrando aca como code="total", etc.
 @router.get("/{code}")
 def get_procedure_detail(
     code: str,
