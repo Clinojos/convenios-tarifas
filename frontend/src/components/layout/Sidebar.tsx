@@ -53,6 +53,7 @@ function UserAvatar({
 
   const src = photoUrl && !customFailed ? photoUrl : DEFAULT_AVATAR_URL;
   const showImage = !(photoUrl ? customFailed : defaultFailed) || (photoUrl && !customFailed);
+  const isDefaultAvatar = src === DEFAULT_AVATAR_URL;
 
   // Si la foto del usuario falla, intentamos con la genérica.
   // Si la genérica también falla (o no hay foto y la genérica falla), mostramos la inicial.
@@ -68,16 +69,17 @@ function UserAvatar({
 
   if (!fallbackToInitial) {
     return (
-      // Contenedor circular: recorta a círculo pero deja que la imagen
-      // (aunque sea rectangular) se vea completa gracias a object-contain.
+      // Contenedor circular: recorta a círculo y la imagen llena todo el
+      // espacio con object-cover (sin bordes blancos), con un leve zoom
+      // extra para que no se vea "flotando" ni con márgenes.
       <div
-        className={`${size} rounded-full overflow-hidden shrink-0 shadow-sm bg-white flex items-center justify-center ${ring ?? ""}`}
+        className={`${size} rounded-full overflow-hidden shrink-0 shadow-sm ${ring ?? ""}`}
       >
         {/* eslint-disable-next-line @next/next/no-img-element */}
         <img
           src={src}
           alt="Foto de perfil"
-          className="w-full h-full object-contain"
+          className={`w-full h-full object-cover ${isDefaultAvatar ? "" : "scale-125"}`}
           onError={handleError}
         />
       </div>
