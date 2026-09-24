@@ -7,6 +7,15 @@ const nextConfig: NextConfig = {
   typescript: {
     ignoreBuildErrors: true,
   },
+  async headers() {
+    return [
+      {
+        // Todas las rutas excepto /login y los assets internos de Next
+        source: "/((?!login|_next).*)",
+        headers: [{ key: "Cache-Control", value: "no-store, max-age=0" }],
+      },
+    ];
+  },
 };
 
 export default nextConfig;

@@ -52,7 +52,12 @@ export function useAuth() {
       // Un usuario puede loguearse sin rol asignado; simplemente no
       // tendrá permisos hasta que un admin le asigne uno.
       document.cookie = `${COOKIE_NAME}=${data.access_token}; path=/; max-age=86400; SameSite=Lax`;
-      window.location.href = "/dashboard";
+
+      // replace (no href): reemplaza la entrada de /login en el historial,
+      // así al dar "atrás" desde el dashboard no se vuelve al login.
+      // No se hace setLoading(false) aquí a propósito: la página se va a
+      // recargar y el botón debe seguir en "cargando" hasta entonces.
+      window.location.replace("/dashboard");
     } catch (err: any) {
       setError(err instanceof Error ? err.message : "Error desconocido");
       setLoading(false); // Importante: deshabilitar loading si hay error

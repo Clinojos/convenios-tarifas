@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, Suspense } from "react";
+import { useEffect, useState, Suspense } from "react";
 import Image from "next/image";
 import { useAuth } from "@/hooks/useAuth";
 
@@ -11,6 +11,18 @@ function LoginContent() {
 
   // El hook maneja tanto errores de credenciales como de falta de rol
   const { login, loading, error } = useAuth();
+
+  // Guard contra el bfcache: si Chrome restaura esta página al dar "atrás"
+  // (queda congelada con las credenciales escritas y el spinner girando),
+  // forzamos una recarga para empezar con el estado limpio y para que el
+  // middleware revalide la cookie (si hay sesión válida, redirige al dashboard).
+  useEffect(() => {
+    const onPageShow = (e: PageTransitionEvent) => {
+      if (e.persisted) window.location.reload();
+    };
+    window.addEventListener("pageshow", onPageShow);
+    return () => window.removeEventListener("pageshow", onPageShow);
+  }, []);
 
   const handleLogin = (e: React.FormEvent) => {
     e.preventDefault();
@@ -39,6 +51,7 @@ function LoginContent() {
               width={160}
               height={44}
               priority
+              style={{ height: "auto" }}
               className="object-contain"
             />
           </div>
@@ -103,6 +116,7 @@ function LoginContent() {
               width={120}
               height={40}
               priority
+              style={{ height: "auto" }}
               className="object-contain"
             />
           </div>

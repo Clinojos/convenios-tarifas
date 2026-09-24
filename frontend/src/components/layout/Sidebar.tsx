@@ -52,7 +52,6 @@ function UserAvatar({
   const [customFailed, setCustomFailed] = useState(false);
 
   const src = photoUrl && !customFailed ? photoUrl : DEFAULT_AVATAR_URL;
-  const showImage = !(photoUrl ? customFailed : defaultFailed) || (photoUrl && !customFailed);
   const isDefaultAvatar = src === DEFAULT_AVATAR_URL;
 
   // Si la foto del usuario falla, intentamos con la genérica.
@@ -208,6 +207,17 @@ export function Sidebar() {
     setIsMounted(true);
   }, []);
 
+  // Guard contra el bfcache: si el navegador restaura esta página al dar
+  // "atrás" (por ejemplo después de cerrar sesión), forzamos una recarga para
+  // que el middleware vuelva a validar la cookie y redirija al login.
+  useEffect(() => {
+    const onPageShow = (e: PageTransitionEvent) => {
+      if (e.persisted) window.location.reload();
+    };
+    window.addEventListener("pageshow", onPageShow);
+    return () => window.removeEventListener("pageshow", onPageShow);
+  }, []);
+
   const isLoading = !isMounted || userLoading;
 
   useEffect(() => {
@@ -226,7 +236,9 @@ export function Sidebar() {
 
   const handleLogout = () => {
     document.cookie = `${COOKIE_NAME}=; expires=Thu, 01 Jan 1970 00:00:00 UTC; path=/;`;
-    window.location.href = "/login";
+    // replace (no href): reemplaza la entrada actual del historial para que
+    // al dar "atrás" no se vuelva al dashboard.
+    window.location.replace("/login");
   };
 
   const getToken = () => {
