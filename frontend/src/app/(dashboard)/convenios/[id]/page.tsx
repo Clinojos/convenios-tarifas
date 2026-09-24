@@ -2,7 +2,7 @@
 
 import { useParams, useSearchParams, useRouter } from "next/navigation";
 import { useState, Suspense } from "react";
-import { Layers, Info, Home, Building2, Briefcase } from "lucide-react";
+import { Layers, Info, Home, Building2, Briefcase, FileX2 } from "lucide-react";
 import { TarifarioBlock } from "@/components/convenios/TarifarioBlock";
 import { InformacionContrato } from "@/components/convenios/InformacionContrato";
 import { InformacionUbicacion } from "@/components/convenios/InformacionUbicacion";
@@ -16,7 +16,23 @@ import { ConvenioDetalleSkeleton } from "@/components/convenios/skeletons/Conven
 
 import { useConvenioDetail } from "@/hooks/useConvenioDetail";
 import { parseObservaciones } from "@/lib/parseObservaciones";
-import { useBreadcrumb, useBreadcrumbNav } from "../../../../components/breadcrumb/BreadcrumbContext";
+import { useBreadcrumb, useBreadcrumbNav } from "@/components/breadcrumb/BreadcrumbContext";
+
+// ---------------------------------------------------------------------------
+// Helpers
+// ---------------------------------------------------------------------------
+
+/** Devuelve true si el valor (string, array u objeto) contiene algo útil. */
+const hasValue = (v: unknown): boolean => {
+  if (v == null) return false;
+  if (typeof v === "string") {
+    const s = v.trim();
+    return s !== "" && s !== "-" && s !== "—";
+  }
+  if (Array.isArray(v)) return v.some(hasValue);
+  if (typeof v === "object") return Object.values(v as object).some(hasValue);
+  return true;
+};
 
 // ---------------------------------------------------------------------------
 // Pestañas
@@ -53,6 +69,28 @@ function TabSegmented({ activeTab, onChange }: { activeTab: TabId; onChange: (id
   );
 }
 
+// ---------------------------------------------------------------------------
+// Estado vacío
+// ---------------------------------------------------------------------------
+
+function EmptyContractInfo() {
+  return (
+    <div className="flex h-full min-h-[280px] flex-col items-center justify-center rounded-2xl border border-slate-100 bg-white px-6 py-12 text-center shadow-sm">
+      <div className="mb-4 flex h-14 w-14 items-center justify-center rounded-full bg-slate-50">
+        <FileX2 size={26} className="text-slate-300" strokeWidth={1.5} />
+      </div>
+      <p className="text-[14px] font-medium text-slate-600">No hay información para este contrato</p>
+      <p className="mt-1 max-w-xs text-[12.5px] text-slate-400">
+        Aún no se han registrado datos.
+      </p>
+    </div>
+  );
+}
+
+// ---------------------------------------------------------------------------
+// Panel de contenido
+// ---------------------------------------------------------------------------
+
 function TabPanel({
   activeTab,
   convenio,
@@ -81,35 +119,87 @@ function TabPanel({
     );
   }
 
+  const p = parsedObservaciones;
+
+  // Cada sección se muestra solo si tiene datos.
+  const sections = [
+    {
+      key: "ubicacion",
+      show: hasValue([p.direccion, p.telefono, p.habilitacion]),
+      node: (
+        <InformacionUbicacion
+          direccion={p.direccion}
+          telefono={p.telefono}
+          habilitacion={p.habilitacion}
+          vencimiento={p.vencimiento}
+        />
+      ),
+    },
+    {
+      key: "contrato",
+      show: hasValue([p.fechaInicio, p.ultimoIncremento, p.vencimiento, p.prorroga]),
+      node: (
+        <InformacionContrato
+          startDate={p.fechaInicio}
+          lastRateIncrease={p.ultimoIncremento}
+          expirationDate={p.vencimiento}
+          autoRenewal={p.prorroga}
+        />
+      ),
+    },
+    {
+      key: "servicios",
+      show: hasValue(p.servicios),
+      node: <ServiciosContratados contractedServices={p.servicios} />,
+    },
+    {
+      key: "documentos",
+      show: hasValue(p.documentos),
+      node: <DocumentosRequeridos requiredDocuments={p.documentos} />,
+    },
+    {
+      key: "radicacion",
+      show: hasValue([p.radicacion, p.docRadicacion, p.copago]),
+      node: (
+        <RadicacionFacturas
+          invoiceFiling={p.radicacion}
+          radicationDocuments={p.docRadicacion}
+          copaymentCollection={p.copago}
+        />
+      ),
+    },
+    {
+      key: "autorizacion",
+      show: hasValue(p.autorizacion),
+      node: <InstruccionesAutorizacion authorizationInstructions={p.autorizacion} />,
+    },
+    {
+      key: "contactos",
+      show: hasValue(p.contactos),
+      node: <ContactoAdministrativo contacts={p.contactos} />,
+    },
+  ].filter((s) => s.show);
+
+  if (sections.length === 0) {
+    return (
+      <div className="min-w-0 flex-1 h-full">
+        <EmptyContractInfo />
+      </div>
+    );
+  }
+
   return (
     <div className="min-w-0 flex-1 overflow-y-auto h-full">
-      <div
-        className="flex flex-wrap gap-3
-                   [&>*]:grow [&>*]:basis-full
-                   sm:[&>*]:basis-[calc(50%-0.375rem)]
-                   xl:[&>*]:basis-[calc(33.333%-0.5rem)]"
-      >
-        <InformacionUbicacion
-          direccion={parsedObservaciones.direccion}
-          telefono={parsedObservaciones.telefono}
-          habilitacion={parsedObservaciones.habilitacion}
-          vencimiento={parsedObservaciones.vencimiento}
-        />
-        <InformacionContrato
-          startDate={parsedObservaciones.fechaInicio}
-          lastRateIncrease={parsedObservaciones.ultimoIncremento}
-          expirationDate={parsedObservaciones.vencimiento}
-          autoRenewal={parsedObservaciones.prorroga}
-        />
-        <ServiciosContratados contractedServices={parsedObservaciones.servicios} />
-        <DocumentosRequeridos requiredDocuments={parsedObservaciones.documentos} />
-        <RadicacionFacturas
-          invoiceFiling={parsedObservaciones.radicacion}
-          radicationDocuments={parsedObservaciones.docRadicacion}
-          copaymentCollection={parsedObservaciones.copago}
-        />
-        <InstruccionesAutorizacion authorizationInstructions={parsedObservaciones.autorizacion} />
-        <ContactoAdministrativo contacts={parsedObservaciones.contactos} />
+      <div className="flex flex-wrap gap-3">
+        {sections.map((s) => (
+          // El wrapper es el item del flex (grow + basis); la tarjeta lo llena por completo.
+          <div
+            key={s.key}
+            className="flex min-w-0 grow basis-full sm:basis-[calc(50%-0.375rem)] xl:basis-[calc(33.333%-0.5rem)] [&>*]:min-w-0 [&>*]:flex-1"
+          >
+            {s.node}
+          </div>
+        ))}
       </div>
     </div>
   );
@@ -146,41 +236,41 @@ function ConvenioDetalleContent() {
   const activeTabLabel = TABS.find((t) => t.id === activeTab)?.label ?? "";
 
   useBreadcrumb(
-  convenio
-    ? [
-        {
-          id: "home",
-          label: "Inicio",
-          icon: Home,
-          onClick: () => router.push(listUrl || "/convenios"), // ← fallback
-        },
-        ...(companyName && companyName !== convenio.name
-          ? [
-              {
-                id: "empresa",
-                label: companyName,
-                icon: Building2,
-                onClick: groupKey
-                  ? () =>
-                      router.push(
-                        savedEmpresaUrl ?? `/convenios/empresa/${encodeURIComponent(groupKey)}`
-                      ) // este ya tenía fallback, queda igual
-                  : undefined,
-              },
-            ]
-          : []),
-        { id: "convenio", label: convenio.name, icon: Briefcase },
-        { id: "tab", label: activeTabLabel },
-      ]
-    : [
-        {
-          id: "home",
-          label: "Inicio",
-          icon: Home,
-          onClick: () => router.push(listUrl || "/convenios"), // ← fallback
-        },
-      ]
-);
+    convenio
+      ? [
+          {
+            id: "home",
+            label: "Inicio",
+            icon: Home,
+            onClick: () => router.push(listUrl || "/convenios"),
+          },
+          ...(companyName && companyName !== convenio.name
+            ? [
+                {
+                  id: "empresa",
+                  label: companyName,
+                  icon: Building2,
+                  onClick: groupKey
+                    ? () =>
+                        router.push(
+                          savedEmpresaUrl ?? `/convenios/empresa/${encodeURIComponent(groupKey)}`,
+                        )
+                    : undefined,
+                },
+              ]
+            : []),
+          { id: "convenio", label: convenio.name, icon: Briefcase },
+          { id: "tab", label: activeTabLabel },
+        ]
+      : [
+          {
+            id: "home",
+            label: "Inicio",
+            icon: Home,
+            onClick: () => router.push(listUrl || "/convenios"),
+          },
+        ],
+  );
 
   if (loading) {
     return <ConvenioDetalleSkeleton />;
@@ -216,8 +306,7 @@ function ConvenioDetalleContent() {
         <TabSegmented activeTab={activeTab} onChange={setActiveTab} />
       </div>
 
-      {/* Separación visual entre el header/tabs y el contenido de abajo
-          (tarifario o info del contrato). Antes iban pegados. */}
+      {/* Separación visual entre el header/tabs y el contenido de abajo */}
       <div className="mt-4 flex min-h-0 flex-1 flex-col">
         <TabPanel
           activeTab={activeTab}

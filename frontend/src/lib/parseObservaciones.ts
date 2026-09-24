@@ -82,6 +82,14 @@ type SectionKey = (typeof SECTION_KEYS)[number];
 const HEADER_RE = /^([A-ZÁÉÍÓÚÑ_]+)\s*:\s*(.*)$/;
 
 const EMPTY_RESULT: ParsedObservaciones = {
+  observaciones: "",
+  direccion: "",
+  telefono: "",
+  habilitacion: "",
+  fechaInicio: "",
+  ultimoIncremento: "",
+  vencimiento: "",
+  prorroga: "",
   servicios: "",
   documentos: [],
   radicacion: "",
@@ -91,7 +99,6 @@ const EMPTY_RESULT: ParsedObservaciones = {
   contactos: [],
   unparsed: "",
 };
-
 function isSectionKey(value: string): value is SectionKey {
   return (SECTION_KEYS as readonly string[]).includes(value);
 }
