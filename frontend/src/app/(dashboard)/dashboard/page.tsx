@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import Link from "next/link";
 import { ArrowRight, Building2, Stethoscope } from "lucide-react";
 import { useDashboard } from "@/hooks/useDashboard";
@@ -78,6 +78,27 @@ const CIRCLE_BASE = "absolute rounded-full transition-transform duration-500 eas
 const ICON_TILE_BASE =
   "flex shrink-0 items-center justify-center rounded-xl text-white shadow-md " +
   "transition-transform duration-300 group-hover:-rotate-[8deg] group-hover:scale-110";
+
+// Detecta si un texto está cortado con "..." (truncate). Se recalcula cuando
+// cambia el contenido o el tamaño del elemento.
+function useIsTruncated<T extends HTMLElement>(content: string) {
+  const ref = useRef<T>(null);
+  const [truncated, setTruncated] = useState(false);
+
+  useEffect(() => {
+    const el = ref.current;
+    if (!el) return;
+
+    const check = () => setTruncated(el.scrollWidth > el.clientWidth);
+    check();
+
+    const observer = new ResizeObserver(check);
+    observer.observe(el);
+    return () => observer.disconnect();
+  }, [content]);
+
+  return [ref, truncated] as const;
+}
 
 function StatusBadge({ active }: { active: boolean }) {
   return (
@@ -159,6 +180,8 @@ function cleanName(name: string) {
 // Fila-tarjeta ligera: mismo lenguaje visual que las tarjetas de convenios.
 // Al pasar el mouse sube, toma borde y sombra de su color, el chip del código
 // se rellena y rota, la bolita del fondo se expande y la flecha se llena.
+// Si el nombre está cortado con "...", aparece un tooltip con el nombre
+// completo, con el mismo estilo de los tooltips del sidebar contraído.
 function ProcedureRow({
   code,
   name,
@@ -170,8 +193,13 @@ function ProcedureRow({
   accent: (typeof ACCENTS)[number];
   className?: string;
 }) {
+  const label = cleanName(name);
+  const [nameRef, truncated] = useIsTruncated<HTMLSpanElement>(label);
+
   return (
-    <li className={className}>
+    // El <li> es el grupo del tooltip. El tooltip va aquí afuera (no dentro
+    // del Link) porque el Link tiene overflow-hidden y lo recortaría.
+    <li className={`group/row relative ${className}`}>
       <Link
         href={`/procedimientos/${code}`}
         className={`group relative flex h-full items-center gap-4 overflow-hidden rounded-2xl border border-slate-200/70 bg-white px-4 py-[clamp(12px,1.9vh,18px)] shadow-sm transition-all duration-300 ease-out hover:z-10 hover:-translate-y-0.5 hover:translate-x-1 hover:shadow-lg focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/50 motion-reduce:transition-none ${accent.hover}`}
@@ -188,10 +216,10 @@ function ProcedureRow({
         </span>
 
         <span
-          title={cleanName(name)}
+          ref={nameRef}
           className="relative min-w-0 flex-1 truncate text-sm text-slate-700 transition-colors duration-200 group-hover:text-navy"
         >
-          {cleanName(name)}
+          {label}
         </span>
 
         <span
@@ -200,6 +228,18 @@ function ProcedureRow({
           <ArrowRight size={14} />
         </span>
       </Link>
+
+      {/* Tooltip estilo sidebar: fondo blanco, borde celeste, texto grisáceo,
+          flechita y animación de escala. Solo existe si el nombre está cortado. */}
+      {truncated && (
+        <span
+          role="tooltip"
+          className="pointer-events-none absolute bottom-full left-4 z-50 mb-2 w-max max-w-[320px] origin-bottom-left scale-0 whitespace-normal rounded-md border border-[#D9EEF8] bg-white px-2.5 py-1.5 text-[11px] font-medium leading-snug text-[#6B9BAE] shadow-sm transition-all group-hover/row:scale-100 group-focus-within/row:scale-100"
+        >
+          {label}
+          <span className="absolute left-6 top-full -mt-1 h-2 w-2 rotate-45 border-b border-r border-[#D9EEF8] bg-white" />
+        </span>
+      )}
     </li>
   );
 }
