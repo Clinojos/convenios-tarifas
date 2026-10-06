@@ -1,5 +1,6 @@
 import os
 import urllib
+import pyodbc
 from sqlalchemy import create_engine
 from sqlmodel import Session, SQLModel
 from dotenv import load_dotenv
@@ -22,8 +23,49 @@ if not all([db_user, db_password, db_server, db_name]):
         f"Valores encontrados: user={db_user}, host={db_server}, db={db_name}"
     )
 
+
+def _detectar_driver_odbc() -> str:
+    """
+    Devuelve el nombre del driver ODBC de SQL Server a usar.
+
+    Orden de prioridad:
+      1. Variable de entorno DB_DRIVER (si existe y está instalado).
+      2. ODBC Driver 18 for SQL Server
+      3. ODBC Driver 17 for SQL Server
+      4. Cualquier otro "ODBC Driver NN for SQL Server" instalado.
+      5. "SQL Server" (driver antiguo de Windows, último recurso).
+    """
+    instalados = pyodbc.drivers()
+
+    preferido = os.getenv("DB_DRIVER")
+    if preferido and preferido in instalados:
+        return preferido
+
+    for candidato in ("ODBC Driver 18 for SQL Server", "ODBC Driver 17 for SQL Server"):
+        if candidato in instalados:
+            return candidato
+
+    otros = sorted(
+        d for d in instalados
+        if d.startswith("ODBC Driver") and d.endswith("for SQL Server")
+    )
+    if otros:
+        return otros[-1]
+
+    if "SQL Server" in instalados:
+        return "SQL Server"
+
+    raise Exception(
+        "No se encontró ningún driver ODBC para SQL Server. "
+        f"Drivers detectados por pyodbc: {instalados}. "
+        "Instala 'Microsoft ODBC Driver 18 for SQL Server' (o el 17)."
+    )
+
+
+DB_DRIVER = _detectar_driver_odbc()
+
 params = urllib.parse.quote_plus(
-    "DRIVER={ODBC Driver 17 for SQL Server};"
+    f"DRIVER={{{DB_DRIVER}}};"
     f"SERVER={db_server};"
     f"DATABASE={db_name};"
     f"UID={db_user};"

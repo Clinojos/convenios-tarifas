@@ -1,4 +1,4 @@
-# Contract-Hosvital
+# Manual de contratos - Clinojos
 
 Sistema web de centralización y consulta de convenios para la Clínica de Ojos.
 

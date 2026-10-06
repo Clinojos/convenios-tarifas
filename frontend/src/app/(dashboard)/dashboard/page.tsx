@@ -1,7 +1,8 @@
 "use client";
 
 import { useState } from "react";
-import { ArrowRight, Stethoscope } from "lucide-react";
+import Link from "next/link";
+import { ArrowRight, Building2, Stethoscope } from "lucide-react";
 import { useDashboard } from "@/hooks/useDashboard";
 import { useTopConvenios } from "@/hooks/useTopConvenios";
 import { useTopProcedures } from "@/hooks/useTopProcedures";
@@ -9,40 +10,63 @@ import { GlobalSearch } from "@/components/ui/GlobalSearch";
 
 type TopConvenio = ReturnType<typeof useTopConvenios>["data"][number];
 
-// Paleta de acentos: cada tarjeta del ranking toma un color distinto de tus
-// variables de globals.css (--magenta, --purple, --orange, --green, --primary),
-// rotando por índice. Clases escritas completas (no interpoladas) a proposito,
-// para que Tailwind las detecte en el build.
+// Paleta de acentos: cada tarjeta toma un color distinto de globals.css,
+// rotando por índice. Clases completas (no interpoladas) para que Tailwind
+// las detecte en el build.
 const ACCENTS = [
   {
     circle: "bg-primary/10",
     icon: "bg-primary shadow-primary/25",
     hover: "hover:border-primary hover:shadow-primary/15",
+    // Para las filas de procedimientos: chip suave en reposo, sólido en hover
+    soft: "bg-primary/10 text-primary",
+    solid: "group-hover:bg-primary group-hover:text-white group-hover:shadow-primary/30",
   },
   {
     circle: "bg-magenta/10",
     icon: "bg-magenta shadow-magenta/25",
     hover: "hover:border-magenta hover:shadow-magenta/15",
+    soft: "bg-magenta/10 text-magenta",
+    solid: "group-hover:bg-magenta group-hover:text-white group-hover:shadow-magenta/30",
   },
   {
     circle: "bg-orange/10",
     icon: "bg-orange shadow-orange/25",
     hover: "hover:border-orange hover:shadow-orange/15",
+    soft: "bg-orange/10 text-orange",
+    solid: "group-hover:bg-orange group-hover:text-white group-hover:shadow-orange/30",
   },
   {
     circle: "bg-purple/10",
     icon: "bg-purple shadow-purple/25",
     hover: "hover:border-purple hover:shadow-purple/15",
+    soft: "bg-purple/10 text-purple",
+    solid: "group-hover:bg-purple group-hover:text-white group-hover:shadow-purple/30",
   },
   {
     circle: "bg-green/10",
     icon: "bg-green shadow-green/25",
     hover: "hover:border-green hover:shadow-green/15",
+    soft: "bg-green/10 text-green",
+    solid: "group-hover:bg-green group-hover:text-white group-hover:shadow-green/30",
   },
 ] as const;
 
-// Tarjeta base: al pasar el mouse crece, sube, toma borde y sombra del color
-// de su acento, el icono rota y la bolita del fondo se expande.
+// Estilos de las tarjetas "ver todos": gradiente sólido de la paleta,
+// distinto a las tarjetas blancas de datos. Clases completas para Tailwind.
+const EXPLORE_THEMES = {
+  convenios: {
+    gradient: "bg-gradient-to-br from-navy via-primary-dark to-primary",
+    shadow: "shadow-primary-dark/25 hover:shadow-primary-dark/45",
+    cta: "text-navy",
+  },
+  procedimientos: {
+    gradient: "bg-gradient-to-br from-purple via-magenta to-orange",
+    shadow: "shadow-magenta/25 hover:shadow-magenta/45",
+    cta: "text-magenta",
+  },
+} as const;
+
 const CARD_BASE =
   "group relative overflow-hidden rounded-2xl border border-slate-200/70 bg-white shadow-sm " +
   "transition-all duration-300 ease-out motion-reduce:transition-none " +
@@ -68,66 +92,230 @@ function StatusBadge({ active }: { active: boolean }) {
   );
 }
 
-function ConvenioCard({ c, featured = false, accent }: { c: TopConvenio; featured?: boolean; accent: (typeof ACCENTS)[number] }) {
+// El destacado es una tarjeta angosta y compacta; las demás son las
+// grandes. Los nombres usan line-clamp-2 para verse completos en vez de
+// cortarse con "...".
+function ConvenioCard({
+  c,
+  featured = false,
+  accent,
+  className = "",
+}: {
+  c: TopConvenio;
+  featured?: boolean;
+  accent: (typeof ACCENTS)[number];
+  className?: string;
+}) {
   return (
-    <a
+    <Link
       href={`/convenios/${encodeURIComponent(c.group_key)}`}
       className={`${CARD_BASE} ${accent.hover} ${
-        featured ? "col-span-2 lg:row-span-2 min-h-[150px] hover:scale-[1.02]" : "min-h-[108px] hover:scale-[1.05]"
-      }`}
+        featured ? "min-h-[130px] hover:scale-[1.03]" : "min-h-[120px] hover:scale-[1.04]"
+      } ${className}`}
     >
       <span
         aria-hidden
-        className={`${CIRCLE_BASE} ${accent.circle} ${featured ? "-top-12 -right-12 w-36 h-36" : "-top-9 -right-9 w-24 h-24"}`}
+        className={`${CIRCLE_BASE} ${accent.circle} -top-10 -right-10 w-28 h-28`}
       />
 
-      <div className={`relative flex h-full flex-col justify-between gap-2 ${featured ? "p-6" : "p-4"}`}>
+      <div className="relative flex h-full flex-col justify-between gap-3 p-5">
         <div className="flex items-start justify-between">
-          <div className={`${ICON_TILE_BASE} ${accent.icon} font-semibold ${featured ? "w-12 h-12 text-lg" : "w-8 h-8 text-sm"}`}>
+          <div className={`${ICON_TILE_BASE} ${accent.icon} font-semibold w-10 h-10 text-base`}>
             {c.display_name.charAt(0).toUpperCase()}
           </div>
           <StatusBadge active={c.is_active} />
         </div>
 
         <div className="min-w-0">
-          <p className={`font-semibold text-navy leading-tight truncate ${featured ? "text-xl" : "text-sm"}`}>
+          <p
+            title={c.display_name}
+            className="line-clamp-2 break-words font-semibold text-navy leading-snug text-[15px]"
+          >
             {c.display_name}
           </p>
           {c.company_name && (
-            <p className={`text-slate-500 truncate mt-0.5 ${featured ? "text-sm" : "text-xs"}`}>{c.company_name}</p>
+            <p title={c.company_name} className="mt-1 line-clamp-2 break-words text-xs text-slate-500 leading-snug">
+              {c.company_name}
+            </p>
           )}
           {featured && c.type && (
-            <p className="text-xs text-slate-400 mt-1">
+            <p className="text-[11px] text-slate-400 mt-1">
               {c.type === "propio" ? "Tarifario propio" : "Programa de descuento"}
             </p>
           )}
         </div>
       </div>
-    </a>
+    </Link>
   );
 }
+
+// Los nombres vienen en MAYÚSCULAS y a veces con el código repetido al inicio.
+// Se limpian para que la lista se lea tranquila.
+function cleanName(name: string) {
+  const n = name.replace(/^\d+\s+/, "").toLowerCase();
+  return n.charAt(0).toUpperCase() + n.slice(1);
+}
+
+// Fila-tarjeta ligera: mismo lenguaje visual que las tarjetas de convenios.
+// Al pasar el mouse sube, toma borde y sombra de su color, el chip del código
+// se rellena y rota, la bolita del fondo se expande y la flecha se llena.
+function ProcedureRow({
+  code,
+  name,
+  accent,
+  className = "",
+}: {
+  code: string;
+  name: string;
+  accent: (typeof ACCENTS)[number];
+  className?: string;
+}) {
+  return (
+    <li className={className}>
+      <Link
+        href={`/procedimientos/${code}`}
+        className={`group relative flex h-full items-center gap-4 overflow-hidden rounded-2xl border border-slate-200/70 bg-white px-4 py-[clamp(12px,1.9vh,18px)] shadow-sm transition-all duration-300 ease-out hover:z-10 hover:-translate-y-0.5 hover:translate-x-1 hover:shadow-lg focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/50 motion-reduce:transition-none ${accent.hover}`}
+      >
+        <span
+          aria-hidden
+          className={`${CIRCLE_BASE} ${accent.circle} -right-8 -top-8 h-16 w-16`}
+        />
+
+        <span
+          className={`relative flex h-9 w-[4.5rem] shrink-0 items-center justify-center rounded-lg text-[13px] font-semibold tabular-nums shadow-md shadow-transparent transition-all duration-300 group-hover:-rotate-[4deg] group-hover:scale-105 ${accent.soft} ${accent.solid}`}
+        >
+          {code}
+        </span>
+
+        <span
+          title={cleanName(name)}
+          className="relative min-w-0 flex-1 truncate text-sm text-slate-700 transition-colors duration-200 group-hover:text-navy"
+        >
+          {cleanName(name)}
+        </span>
+
+        <span
+          className={`relative flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-slate-100 text-slate-400 transition-all duration-300 group-hover:translate-x-0.5 group-hover:text-white ${accent.solid}`}
+        >
+          <ArrowRight size={14} />
+        </span>
+      </Link>
+    </li>
+  );
+}
+
+// Tarjeta "ver todos" / catálogo: NO es un ítem más, es una puerta de entrada.
+// Por eso va con gradiente sólido de la paleta, texto blanco, destello al
+// pasar el mouse y un botón blanco tipo píldora. Se distingue de las
+// tarjetas blancas de datos.
+function ExploreCard({
+  href,
+  icon,
+  big,
+  label,
+  cta,
+  theme,
+  className = "",
+}: {
+  href: string;
+  icon: React.ReactNode;
+  big: string;
+  label: string;
+  cta: string;
+  theme: (typeof EXPLORE_THEMES)[keyof typeof EXPLORE_THEMES];
+  className?: string;
+}) {
+  return (
+    <Link
+      href={href}
+      className={`group relative overflow-hidden rounded-2xl text-white shadow-lg ${theme.gradient} ${theme.shadow} transition-all duration-300 ease-out motion-reduce:transition-none hover:z-10 hover:-translate-y-1 hover:scale-[1.03] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white/70 focus-visible:ring-offset-2 ${className}`}
+    >
+      {/* Círculos decorativos */}
+      <span
+        aria-hidden
+        className="absolute -right-12 -top-12 h-40 w-40 rounded-full bg-white/10 transition-transform duration-500 ease-out group-hover:scale-[1.6]"
+      />
+      <span
+        aria-hidden
+        className="absolute -bottom-14 -left-10 h-36 w-36 rounded-full bg-white/10 transition-transform duration-500 ease-out group-hover:scale-125"
+      />
+
+      {/* Destello que cruza la tarjeta en hover */}
+      <span
+        aria-hidden
+        className="pointer-events-none absolute inset-y-0 -left-1/2 w-1/2 -skew-x-12 bg-gradient-to-r from-transparent via-white/25 to-transparent opacity-0 transition-all duration-700 ease-out group-hover:left-[130%] group-hover:opacity-100 motion-reduce:hidden"
+      />
+
+      <div className="relative flex h-full flex-col justify-between gap-3 p-5">
+        <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-white/20 text-white shadow-inner ring-1 ring-white/30 backdrop-blur-sm transition-transform duration-300 group-hover:-rotate-[8deg] group-hover:scale-110">
+          {icon}
+        </div>
+
+        <div>
+          <p className="text-2xl font-bold leading-none tabular-nums drop-shadow-sm">{big}</p>
+          <p className="mt-1 text-sm text-white/80">{label}</p>
+          <span
+            className={`mt-3 inline-flex items-center gap-2 rounded-full bg-white px-3 py-1.5 text-xs font-semibold shadow-md transition-all duration-300 group-hover:gap-3 group-hover:shadow-lg ${theme.cta}`}
+          >
+            {cta}
+            <ArrowRight size={14} className="transition-transform duration-300 group-hover:translate-x-1" />
+          </span>
+        </div>
+      </div>
+    </Link>
+  );
+}
+
+// Encabezado de sección: mismo formato para convenios y procedimientos.
+function SectionHeader({
+  icon,
+  title,
+  subtitle,
+}: {
+  icon: React.ReactNode;
+  title: string;
+  subtitle: string;
+}) {
+  return (
+    <div className="mb-3.5 flex items-center gap-3">
+      <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-primary/10 text-primary">
+        {icon}
+      </span>
+      <div className="leading-tight">
+        <h2 className="text-[15px] font-semibold text-navy">{title}</h2>
+        <p className="mt-0.5 text-xs text-slate-400">{subtitle}</p>
+      </div>
+    </div>
+  );
+}
+
+// Columnas del bloque de convenios en pantallas grandes:
+// destacado (angosto) | 2x2 (ancho) | ver todos
+const CONVENIOS_GRID =
+  "grid grid-cols-2 gap-3 lg:grid-cols-[minmax(0,2fr)_minmax(0,5fr)_minmax(0,1.6fr)]";
 
 export default function DashboardPage() {
   const [query, setQuery] = useState("");
   const { total: totalProcedures, loading: loadingTotalProcedures } = useDashboard("procedures");
   const { data: topConvenios, loading: loadingTop } = useTopConvenios(5);
-  const { data: topProcedures, loading: loadingTopProcedures } = useTopProcedures(5);
+  // 4 procedimientos = rejilla 2x2, igual que el bloque de convenios
+  const { data: topProcedures, loading: loadingTopProcedures } = useTopProcedures(4);
 
-  // El primero del ranking va como tarjeta destacada; los otros 4 al lado.
-  const [featured, ...rest] = topConvenios;
+  // El primero del ranking va como tarjeta destacada (compacta);
+  // los otros 4 van en la rejilla 2x2 más grande.
+  const [featured, ...rest] = topConvenios ?? [];
 
-  // Las medidas usan clamp() con vh: en pantallas altas respira, en pantallas
-  // bajas se compacta solo, para que la pagina no necesite scroll.
   return (
-    <div className="max-w-[1100px] mx-auto px-6 md:px-8 py-[clamp(16px,3vh,32px)] space-y-[clamp(20px,3.5vh,36px)] font-sans">
+    <div className="max-w-[1100px] mx-auto px-6 md:px-8 py-[clamp(20px,4vh,44px)] space-y-[clamp(28px,5vh,52px)] font-sans">
       {/* Buscador */}
       <header className="text-center">
-        <h1 className="text-2xl md:text-[26px] font-semibold text-navy tracking-tight mb-1.5">
+        <h1 className="text-[28px] md:text-[32px] font-semibold text-navy tracking-tight">
           ¿Qué necesitas consultar?
         </h1>
-        <p className="text-sm text-slate-500 mb-[clamp(12px,2.2vh,20px)]">
-          Escribe un código CUPS, el nombre de un procedimiento o una empresa con convenio
+        <p className="mt-2 mb-[clamp(16px,3vh,26px)] text-sm text-slate-500">
+          Busca por código CUPS, procedimiento o empresa
         </p>
+
         <GlobalSearch
           variant="compact"
           query={query}
@@ -137,95 +325,91 @@ export default function DashboardPage() {
         />
       </header>
 
-      {/* Convenios mas consultados: bento con el #1 destacado.
-          group_key es el contract_key del CONVENIO individual (no de la
-          empresa), asi que "BANCO" y "BANCO1" salen como tarjetas separadas. */}
+      {/* Convenios: destacado (compacto) | 2x2 (grande) | ver todos.
+          group_key es el contract_key del CONVENIO individual (no de la empresa). */}
       <section>
-        <div className="flex items-baseline justify-between mb-3">
-          <h2 className="text-sm font-semibold text-navy">Convenios más consultados</h2>
-          <a href="/convenios" className="text-xs text-slate-500 hover:text-primary transition-colors">
-            Ver todos
-          </a>
-        </div>
+        <SectionHeader
+          icon={<Building2 size={16} />}
+          title="Convenios más consultados"
+          subtitle="Los convenios con más visitas"
+        />
 
         {loadingTop ? (
-          <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 lg:auto-rows-[clamp(108px,13vh,128px)]">
-            <div className="col-span-2 lg:row-span-2 min-h-[150px] rounded-2xl bg-slate-100 animate-pulse" />
-            {Array.from({ length: 4 }).map((_, i) => (
-              <div key={i} className="min-h-[108px] rounded-2xl bg-slate-100 animate-pulse" />
-            ))}
+          <div className={CONVENIOS_GRID}>
+            <div className="col-span-2 lg:col-span-1 min-h-[130px] rounded-2xl bg-slate-100 animate-pulse" />
+            <div className="col-span-2 lg:col-span-1 grid grid-cols-2 grid-rows-2 gap-3">
+              {Array.from({ length: 4 }).map((_, i) => (
+                <div key={i} className="min-h-[120px] rounded-2xl bg-slate-100 animate-pulse" />
+              ))}
+            </div>
+            <div className="col-span-2 lg:col-span-1 min-h-[120px] rounded-2xl bg-slate-100 animate-pulse" />
           </div>
         ) : !featured ? (
-          <p className="text-xs text-slate-400 py-8 text-center">
-            Todavía no hay visitas registradas.
-          </p>
+          <p className="py-8 text-center text-xs text-slate-400">Todavía no hay visitas registradas.</p>
         ) : (
-          <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 lg:auto-rows-[clamp(108px,13vh,128px)]">
-            <ConvenioCard c={featured} featured accent={ACCENTS[0]} />
-            {rest.slice(0, 4).map((c, i) => (
-              <ConvenioCard key={c.group_key} c={c} accent={ACCENTS[(i + 1) % ACCENTS.length]} />
-            ))}
+          <div className={CONVENIOS_GRID}>
+            <ConvenioCard
+              c={featured}
+              featured
+              accent={ACCENTS[0]}
+              className="col-span-2 lg:col-span-1"
+            />
+
+            <div className="col-span-2 lg:col-span-1 grid grid-cols-2 grid-rows-2 gap-3">
+              {rest.slice(0, 4).map((c, i) => (
+                <ConvenioCard key={c.group_key} c={c} accent={ACCENTS[(i + 1) % ACCENTS.length]} />
+              ))}
+            </div>
+
+            <ExploreCard
+              href="/convenios"
+              icon={<Building2 size={18} />}
+              big="Ver todos"
+              label="los convenios"
+              cta="Explorar convenios"
+              theme={EXPLORE_THEMES.convenios}
+              className="col-span-2 lg:col-span-1 min-h-[120px]"
+            />
           </div>
         )}
       </section>
 
-      {/* Procedimientos mas consultados: ahora viene de la BD real
-          (tabla procedure_visits), igual que convenios con agreement_visits. */}
+      {/* Procedimientos: 2x2 (4 columnas) | catálogo (1 columna) */}
       <section>
-        <h2 className="text-sm font-semibold text-navy mb-3">Procedimientos más consultados</h2>
+        <SectionHeader
+          icon={<Stethoscope size={16} />}
+          title="Procedimientos más consultados"
+          subtitle="Los procedimientos con más visitas"
+        />
 
-        <div className="grid grid-cols-1 lg:grid-cols-3 gap-3">
-          <ul className="lg:col-span-2 rounded-2xl border border-slate-200/70 bg-white shadow-sm divide-y divide-slate-100 overflow-hidden">
+        <div className="grid grid-cols-1 lg:grid-cols-5 gap-3">
+          <ul className="lg:col-span-4 grid grid-cols-1 sm:grid-cols-2 sm:grid-rows-2 gap-3">
             {loadingTopProcedures ? (
-              Array.from({ length: 5 }).map((_, i) => (
-                <li key={i} className="px-5 py-3">
-                  <div className="h-4 bg-slate-100 rounded animate-pulse" />
+              Array.from({ length: 4 }).map((_, i) => (
+                <li key={i}>
+                  <div className="h-full min-h-[clamp(58px,8vh,70px)] rounded-2xl bg-slate-100 animate-pulse" />
                 </li>
               ))
-            ) : topProcedures.length === 0 ? (
-              <li className="px-5 py-8 text-center text-xs text-slate-400">
+            ) : !topProcedures || topProcedures.length === 0 ? (
+              <li className="sm:col-span-2 py-8 text-center text-xs text-slate-400">
                 Todavía no hay visitas registradas.
               </li>
             ) : (
-              topProcedures.map((p) => (
-                <li key={p.code}>
-                  <a
-                    href={`/procedimientos/${p.code}`}
-                    className="group flex items-center gap-4 px-5 py-[clamp(8px,1.2vh,12px)] hover:bg-slate-50 transition-colors focus-visible:outline-none focus-visible:bg-slate-50"
-                  >
-                    <span className="w-16 shrink-0 text-sm font-semibold text-primary tabular-nums">{p.code}</span>
-                    <span className="flex-1 min-w-0 truncate text-sm text-slate-700 group-hover:text-navy transition-colors">
-                      {p.name}
-                    </span>
-                    <ArrowRight
-                      size={14}
-                      className="shrink-0 text-primary opacity-0 -translate-x-1 transition-all duration-200 group-hover:opacity-100 group-hover:translate-x-0"
-                    />
-                  </a>
-                </li>
+              topProcedures.map((p, i) => (
+                <ProcedureRow key={p.code} code={p.code} name={p.name} accent={ACCENTS[i % ACCENTS.length]} />
               ))
             )}
           </ul>
 
-          {/* Tarjeta del catalogo: acceso a todos los procedimientos */}
-          <a href="/procedimientos" className={`${CARD_BASE} ${ACCENTS[0].hover} min-h-[160px] hover:scale-[1.03]`}>
-            <span aria-hidden className={`${CIRCLE_BASE} ${ACCENTS[0].circle} -top-12 -right-12 w-36 h-36`} />
-            <div className="relative flex h-full flex-col justify-between gap-3 p-5">
-              <div className={`${ICON_TILE_BASE} ${ACCENTS[0].icon} w-10 h-10`}>
-                <Stethoscope size={18} />
-              </div>
-              <div>
-                <p className="text-2xl font-bold text-navy leading-none tabular-nums">
-                  {loadingTotalProcedures ? "..." : totalProcedures.toLocaleString()}
-                </p>
-                <p className="text-sm text-slate-500 mt-1">procedimientos en el catálogo</p>
-                <span className="mt-2.5 inline-flex items-center gap-2 text-xs font-semibold text-primary">
-                  Explorar catálogo
-                  <ArrowRight size={14} className="transition-transform duration-200 group-hover:translate-x-1" />
-                </span>
-              </div>
-            </div>
-          </a>
+          <ExploreCard
+            href="/procedimientos"
+            icon={<Stethoscope size={18} />}
+            big={loadingTotalProcedures ? "..." : totalProcedures.toLocaleString("es-CO")}
+            label="procedimientos"
+            cta="Explorar catálogo"
+            theme={EXPLORE_THEMES.procedimientos}
+            className="min-h-[150px]"
+          />
         </div>
       </section>
     </div>
