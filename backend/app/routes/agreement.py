@@ -183,6 +183,42 @@ def get_agreements_total(
     return {"total": total_records}
 
 
+# IMPORTANTE: "/groups/total" va ANTES de "/groups/{group_key}". Si no,
+# FastAPI matchea "total" como group_key.
+@router.get("/groups/total")
+def get_agreement_groups_total(
+    session: Session = Depends(get_session_hosvital),
+    q: str = None,
+    status: str = None,
+    _current_user: dict = Depends(get_current_user),
+):
+    """Cantidad de grupos (empresas) con la misma lógica de agrupación de
+    /groups, para que el número del dashboard coincida con lo que lista
+    la página /convenios."""
+    query = select(Agreement).where(Agreement.MENNIT.isnot(None))
+    query = apply_search_filter(query, Agreement, q)
+
+    if status:
+        val_estado = '0' if status == 'active' else '1'
+        query = query.where(Agreement.MEestado == val_estado)
+
+    agreements = session.exec(query).all()
+
+    keys = set()
+    for agreement in agreements:
+        try:
+            nit = str(agreement.MEcntr).strip() if agreement.MEcntr is not None else ""
+            key = _get_group_key(nit)
+            if key is None:
+                key = str(agreement.MENNIT).strip() if agreement.MENNIT is not None else nit
+            keys.add(key)
+        except Exception as e:
+            print(f"Registro corrupto ignorado al contar grupos (NIT: {agreement.MEcntr}): {e}")
+            continue
+
+    return {"total": len(keys)}
+
+
 @router.get("/groups")
 def list_agreement_groups(
     session: Session = Depends(get_session_hosvital),

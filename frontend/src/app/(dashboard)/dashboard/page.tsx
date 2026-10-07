@@ -1,12 +1,13 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useLayoutEffect, useRef, useState } from "react";
 import Link from "next/link";
 import { ArrowRight, Building2, Stethoscope } from "lucide-react";
 import { useDashboard } from "@/hooks/useDashboard";
 import { useTopConvenios } from "@/hooks/useTopConvenios";
 import { useTopProcedures } from "@/hooks/useTopProcedures";
 import { GlobalSearch } from "@/components/ui/GlobalSearch";
+
 
 type TopConvenio = ReturnType<typeof useTopConvenios>["data"][number];
 
@@ -180,8 +181,13 @@ function cleanName(name: string) {
 // Fila-tarjeta ligera: mismo lenguaje visual que las tarjetas de convenios.
 // Al pasar el mouse sube, toma borde y sombra de su color, el chip del código
 // se rellena y rota, la bolita del fondo se expande y la flecha se llena.
-// Si el nombre está cortado con "...", aparece un tooltip con el nombre
-// completo, con el mismo estilo de los tooltips del sidebar contraído.
+//
+// Tooltip: si el nombre está cortado con "...", aparece una etiqueta de UNA
+// sola línea justo debajo del puntero y lo sigue mientras se mueve. Así no
+// tapa la tarjeta de arriba ni el texto que se está leyendo. Es position:fixed
+// con pointer-events-none, por lo que no recibe el mouse ni lo recorta el
+// overflow-hidden de la tarjeta. Si el puntero está en la mitad derecha de la
+// pantalla, la etiqueta se abre hacia la izquierda para no salirse.
 function ProcedureRow({
   code,
   name,
@@ -195,11 +201,32 @@ function ProcedureRow({
 }) {
   const label = cleanName(name);
   const [nameRef, truncated] = useIsTruncated<HTMLSpanElement>(label);
+  const [pointer, setPointer] = useState<{ x: number; y: number } | null>(null);
+  const [tipWidth, setTipWidth] = useState(0);
+  const tipRef = useRef<HTMLSpanElement>(null);
+
+  const handleMove = (e: React.MouseEvent) => {
+    if (!truncated) return;
+    setPointer({ x: e.clientX, y: e.clientY });
+  };
+
+  // Mide el ancho real del tooltip para poder mantenerlo dentro de la pantalla.
+  useLayoutEffect(() => {
+    if (tipRef.current) setTipWidth(tipRef.current.offsetWidth);
+  }, [pointer !== null, label]);
+
+  // Empieza en el puntero; solo se corre a la izquierda lo necesario si no cabe.
+  const MARGIN = 8;
+  const left = pointer
+    ? Math.max(MARGIN, Math.min(pointer.x, window.innerWidth - tipWidth - MARGIN))
+    : 0;
 
   return (
-    // El <li> es el grupo del tooltip. El tooltip va aquí afuera (no dentro
-    // del Link) porque el Link tiene overflow-hidden y lo recortaría.
-    <li className={`group/row relative ${className}`}>
+    <li
+      className={`relative ${className}`}
+      onMouseMove={handleMove}
+      onMouseLeave={() => setPointer(null)}
+    >
       <Link
         href={`/procedimientos/${code}`}
         className={`group relative flex h-full items-center gap-4 overflow-hidden rounded-2xl border border-slate-200/70 bg-white px-4 py-[clamp(12px,1.9vh,18px)] shadow-sm transition-all duration-300 ease-out hover:z-10 hover:-translate-y-0.5 hover:translate-x-1 hover:shadow-lg focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/50 motion-reduce:transition-none ${accent.hover}`}
@@ -229,15 +256,18 @@ function ProcedureRow({
         </span>
       </Link>
 
-      {/* Tooltip estilo sidebar: fondo blanco, borde celeste, texto grisáceo,
-          flechita y animación de escala. Solo existe si el nombre está cortado. */}
-      {truncated && (
+      {truncated && pointer && (
         <span
+          ref={tipRef}
           role="tooltip"
-          className="pointer-events-none absolute bottom-full left-4 z-50 mb-2 w-max max-w-[320px] origin-bottom-left scale-0 whitespace-normal rounded-md border border-[#D9EEF8] bg-white px-2.5 py-1.5 text-[11px] font-medium leading-snug text-[#6B9BAE] shadow-sm transition-all group-hover/row:scale-100 group-focus-within/row:scale-100"
+          style={{
+            position: "fixed",
+            top: pointer.y + 18,
+            left,
+          }}
+          className="pointer-events-none z-50 max-w-[calc(100vw-16px)] overflow-hidden text-ellipsis whitespace-nowrap rounded-md border border-[#D9EEF8] bg-white px-2.5 py-1 text-[11px] font-medium text-[#6B9BAE] shadow-sm"
         >
           {label}
-          <span className="absolute left-6 top-full -mt-1 h-2 w-2 rotate-45 border-b border-r border-[#D9EEF8] bg-white" />
         </span>
       )}
     </li>
@@ -337,6 +367,14 @@ const CONVENIOS_GRID =
 export default function DashboardPage() {
   const [query, setQuery] = useState("");
   const { total: totalProcedures, loading: loadingTotalProcedures } = useDashboard("procedures");
+
+  // Total de convenios para la tarjeta "Ver todos".
+  // "agreements"        -> cuenta cada convenio individual (MAEEMP / MENNIT).
+  // "agreements/groups" -> cuenta empresas agrupadas. Cambia a este valor si
+  //                        la página /convenios lista tarjetas por empresa
+  //                        (/agreements/groups) y quieres que el número coincida.
+  const { total: totalConvenios, loading: loadingTotalConvenios } = useDashboard("agreements");
+
   const { data: topConvenios, loading: loadingTop } = useTopConvenios(5);
   // 4 procedimientos = rejilla 2x2, igual que el bloque de convenios
   const { data: topProcedures, loading: loadingTopProcedures } = useTopProcedures(4);
@@ -404,8 +442,8 @@ export default function DashboardPage() {
             <ExploreCard
               href="/convenios"
               icon={<Building2 size={18} />}
-              big="Ver todos"
-              label="los convenios"
+              big={loadingTotalConvenios ? "..." : totalConvenios.toLocaleString("es-CO")}
+              label="convenios"
               cta="Explorar convenios"
               theme={EXPLORE_THEMES.convenios}
               className="col-span-2 lg:col-span-1 min-h-[120px]"
