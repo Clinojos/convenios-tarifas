@@ -3,8 +3,8 @@
 import { useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { useRouter } from "next/navigation";
-import { Building2, Layers, ChevronRight, Tag, AlertCircle, ArrowDown, ArrowUp, FileText } from "lucide-react";
-import { Pagination } from "@/components/ui/Pagination"; // ajusta la ruta según donde guardes el archivo
+import { Building2, Layers, ChevronRight, Tag, AlertCircle, ArrowDown, ArrowUp } from "lucide-react";
+import { Pagination } from "@/components/ui/Pagination";
 
 export type Offer = {
   contract_key: string;
@@ -41,20 +41,15 @@ const WARNING_FG = "var(--orange-dark)";
 const TOOLTIP_BORDER = "#D9EEF8";
 const TOOLTIP_FG = "#6B9BAE";
 
-// Alto fijo de cada fila. La CANTIDAD de filas por página ya NO es fija:
-// se calcula solo, midiendo cuánto espacio hay disponible (ver
-// useAvailableRows más abajo), así nunca aparece scroll y siempre es
-// responsivo al tamaño de pantalla / zoom.
+// ROW_HEIGHT ahora es el alto MÍNIMO de una fila. Con él se calcula cuántas
+// filas caben (rowsPerPage); después el alto real de cada fila se reparte
+// para que las filas llenen el panel completo, sin espacio sobrante abajo.
 const ROW_HEIGHT = 72;
 const DEFAULT_ROWS_PER_PAGE = 8; // solo para el primer render, antes de medir
 
 // Alto SIEMPRE reservado para el pie de paginación del panel de detalle
-// (derecha), tenga o no controles visibles. Antes ese contenedor solo se
-// renderizaba cuando había más de una página de convenios, así que el alto
-// disponible del panel cambiaba según la empresa seleccionada. Eso disparaba
-// el ResizeObserver, recalculaba rowsPerPage, eso recalculaba cuántas
-// páginas de EMPRESAS había, y terminaba reseteando/saltando la selección.
-// Reservando el alto siempre, el panel nunca cambia de tamaño por esto.
+// (derecha), tenga o no controles visibles, para que el panel nunca cambie
+// de tamaño según la empresa seleccionada.
 const DETAIL_FOOTER_HEIGHT = 44;
 
 export const formatPrice = (n: number) =>
@@ -125,20 +120,23 @@ function groupByCompany(rows: Offer[]): CompanyGroup[] {
   });
 }
 
-// Mide en vivo cuánto alto tiene un contenedor (con ResizeObserver, así que
-// reacciona a resize de ventana Y a zoom del navegador) y devuelve cuántas
-// filas de ROW_HEIGHT entran exactamente ahí.
-function useRowsThatFit(rowHeight: number) {
+// Mide en vivo el alto de un contenedor (ResizeObserver: reacciona a resize
+// y zoom). Devuelve cuántas filas de `minRowHeight` caben Y el alto medido,
+// para poder repartir ese alto exacto entre las filas.
+function useRowsThatFit(minRowHeight: number) {
   const ref = useRef<HTMLDivElement | null>(null);
-  const [rows, setRows] = useState<number | null>(null);
+  const [state, setState] = useState<{ rows: number | null; height: number }>({
+    rows: null,
+    height: 0,
+  });
 
   useLayoutEffect(() => {
     const el = ref.current;
     if (!el) return;
 
     const measure = (height: number) => {
-      const fit = Math.max(1, Math.floor(height / rowHeight));
-      setRows(fit);
+      const fit = Math.max(1, Math.floor(height / minRowHeight));
+      setState((prev) => (prev.rows === fit && prev.height === height ? prev : { rows: fit, height }));
     };
 
     measure(el.getBoundingClientRect().height);
@@ -149,17 +147,14 @@ function useRowsThatFit(rowHeight: number) {
     });
     ro.observe(el);
     return () => ro.disconnect();
-  }, [rowHeight]);
+  }, [minRowHeight]);
 
-  return [ref, rows] as const;
+  return [ref, state.rows, state.height] as const;
 }
 
-// Tooltip mediante portal a document.body, con position: fixed calculada a
-// partir del getBoundingClientRect del elemento. Al vivir fuera del árbol
-// del contenedor con overflow-hidden, ya NUNCA se recorta. Además queda
-// centrado horizontalmente respecto al elemento y se ajusta (clamp) para no
-// salirse de los bordes de la pantalla. Si no hay espacio arriba, se muestra
-// debajo en vez de arriba.
+// Tooltip mediante portal a document.body, con position: fixed. Vive fuera
+// del contenedor con overflow-hidden, así que nunca se recorta. Queda
+// centrado respecto al elemento y se ajusta para no salirse de pantalla.
 function TooltipPortal({ coords, text }: { coords: { top: number; left: number } | null; text: string }) {
   if (!coords || typeof document === "undefined") return null;
 
@@ -202,9 +197,6 @@ function TooltipPortal({ coords, text }: { coords: { top: number; left: number }
   );
 }
 
-// Envoltorio reutilizable: detecta el hover sobre "children" y muestra el
-// TooltipPortal centrado sobre ese elemento. `disabled` se usa cuando el
-// texto no está truncado y por lo tanto no hace falta mostrar tooltip.
 function TooltipAnchor({
   text,
   disabled,
@@ -238,9 +230,6 @@ function TooltipAnchor({
   );
 }
 
-// Badge con: icono, prefijo ("Portafolio:", "Tarifario:") y tooltip si el
-// texto se corta. El prefijo se queda siempre visible; solo el valor se
-// trunca y muestra el tooltip completo al pasar el mouse.
 function LabeledBadge({
   icon,
   prefix,
@@ -329,23 +318,24 @@ export function OfertasConvenioTable({
 }: OfertasConvenioTableProps) {
   const router = useRouter();
 
-  // Un medidor por panel: cada uno mide su propio alto disponible (el
-  // panel derecho tiene un encabezado que el izquierdo no tiene, así que
-  // sus alturas útiles no son iguales aunque el panel completo sí lo sea).
-  // Como el pie de paginación del detalle ahora SIEMPRE reserva su alto
-  // (ver DETAIL_FOOTER_HEIGHT), esta medición ya no fluctúa al cambiar de
-  // empresa seleccionada.
-  const [leftBodyRef, leftFit] = useRowsThatFit(ROW_HEIGHT);
-  const [rightBodyRef, rightFit] = useRowsThatFit(ROW_HEIGHT);
+  // Un medidor por panel (el derecho tiene encabezado y pie que el
+  // izquierdo no tiene, así que sus alturas útiles son distintas).
+  const [leftBodyRef, leftFit, leftHeight] = useRowsThatFit(ROW_HEIGHT);
+  const [rightBodyRef, rightFit, rightHeight] = useRowsThatFit(ROW_HEIGHT);
 
-  // Usamos el más chico de los dos para que NINGUNO de los dos se
-  // desborde, y así ambos paneles siempre terminan mostrando la misma
-  // cantidad de filas (mismo alto visual).
+  // Se usa el menor de los dos para que ningún panel se desborde y ambos
+  // muestren la misma cantidad de filas.
   const rowsPerPage = useMemo(() => {
     const candidates = [leftFit, rightFit].filter((v): v is number => v !== null);
     if (candidates.length === 0) return DEFAULT_ROWS_PER_PAGE;
     return Math.min(...candidates);
   }, [leftFit, rightFit]);
+
+  // Alto real de cada fila: se reparte el alto medido de cada panel entre
+  // rowsPerPage, así las filas llenan todo el panel (sin hueco abajo) y
+  // siempre son >= ROW_HEIGHT.
+  const leftRowHeight = leftHeight > 0 ? leftHeight / rowsPerPage : ROW_HEIGHT;
+  const rightRowHeight = rightHeight > 0 ? rightHeight / rowsPerPage : ROW_HEIGHT;
 
   const groups = useMemo(() => {
     const grouped = groupByCompany(rows);
@@ -370,24 +360,18 @@ export function OfertasConvenioTable({
   const [selectedCompany, setSelectedCompany] = useState<string | null>(null);
   const [detailPage, setDetailPage] = useState(1);
 
+  // Solo se limpia la selección si la empresa ya no existe en la lista
+  // (por ejemplo, al aplicar un filtro de búsqueda). Cambiar de página NO
+  // la borra: la empresa elegida se queda en el panel derecho.
   useEffect(() => {
     if (selectedCompany && !groups.some((g) => g.companyName === selectedCompany)) {
       setSelectedCompany(null);
     }
   }, [groups, selectedCompany]);
 
-  // Antes esto dependía de `safePage`, que se recalculaba solo cuando
-  // `rowsPerPage` fluctuaba (por el bug del pie de detalle). Eso hacía que
-  // seleccionar una empresa a veces "reseteara" la selección y saltara a
-  // otra página/empresa sin que el usuario hubiera hecho clic en la
-  // paginación. Ahora depende de `page` (la prop real que cambia solo
-  // cuando el usuario pagina), así que solo se limpia la selección en una
-  // navegación de página real.
-  useEffect(() => {
-    setSelectedCompany(null);
-  }, [page]);
-
-  const selectedGroup = groups.find((g) => g.companyName === selectedCompany) ?? pageGroups[0] ?? null;
+  // Fallback: la primera empresa de la lista COMPLETA (no de la página),
+  // para que no cambie al paginar cuando todavía no se ha elegido ninguna.
+  const selectedGroup = groups.find((g) => g.companyName === selectedCompany) ?? groups[0] ?? null;
 
   useEffect(() => {
     setDetailPage(1);
@@ -423,10 +407,7 @@ export function OfertasConvenioTable({
   return (
     <>
       <div className="grid grid-cols-1 md:grid-cols-[360px_1fr] gap-3 flex-1 min-h-0">
-        {/* Columna izquierda: una fila por EMPRESA. overflow-hidden en vez
-            de overflow-y-auto: como rowsPerPage se calcula para que quepa
-            exacto, nunca debería desbordar; overflow-hidden es solo la red
-            de seguridad para que jamás aparezca un scrollbar. */}
+        {/* Columna izquierda: una fila por EMPRESA. */}
         <div className="bg-white border rounded-2xl flex flex-col min-h-0 overflow-hidden" style={{ borderColor: BORDER }}>
           <div ref={leftBodyRef} className="flex-1 min-h-0 overflow-hidden">
             {pageGroups.map((group, idx) => {
@@ -439,7 +420,7 @@ export function OfertasConvenioTable({
                   onClick={() => setSelectedCompany(group.companyName)}
                   className="w-full flex items-center justify-between gap-3 px-4 text-left transition-colors cursor-pointer"
                   style={{
-                    height: ROW_HEIGHT,
+                    height: leftRowHeight,
                     borderBottom: isLast ? "none" : `1px solid ${BORDER}`,
                     background: isSelected ? SURFACE : "white",
                     boxShadow: isSelected ? `inset 2px 0 0 ${ACCENT}` : undefined,
@@ -518,16 +499,12 @@ export function OfertasConvenioTable({
                       onClick={() => router.push(offer.route)}
                       className="flex items-center justify-between gap-3 pl-3.5 pr-4 cursor-pointer transition-colors hover:bg-[#FAFBFC]"
                       style={{
-                        height: ROW_HEIGHT,
+                        height: rightRowHeight,
                         borderBottom: isLastRow ? "none" : `1px solid ${BORDER}`,
                         borderLeft: `2.5px solid ${rowInactive ? INACTIVE : ACCENT}`,
                       }}
                     >
                       <div className="min-w-0">
-                        {/* Etiqueta chiquita "Convenio" arriba del nombre,
-                            mismo estilo de caption que usan las tarjetas de
-                            precio más bajo/alto, para que quede claro que
-                            ESTE texto es el nombre del convenio. */}
                         <TooltipAnchor
                           text={offer.convenio_name}
                           disabled={offer.convenio_name.length <= 22}
@@ -594,11 +571,7 @@ export function OfertasConvenioTable({
                 })}
               </div>
 
-              {/* Este contenedor SIEMPRE ocupa DETAIL_FOOTER_HEIGHT, tenga o
-                  no controles de paginación adentro. Es el fix del bug de
-                  "salta de empresa/página": antes este bloque solo existía
-                  en el DOM cuando detailTotalPages > 1, así que el alto del
-                  panel derecho cambiaba según la empresa seleccionada. */}
+              {/* Siempre reserva DETAIL_FOOTER_HEIGHT, tenga o no paginación. */}
               <div
                 className="shrink-0 px-2 flex items-center"
                 style={{
