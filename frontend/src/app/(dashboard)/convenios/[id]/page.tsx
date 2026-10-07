@@ -79,9 +79,9 @@ function EmptyContractInfo() {
       <div className="mb-4 flex h-14 w-14 items-center justify-center rounded-full bg-slate-50">
         <FileX2 size={26} className="text-slate-300" strokeWidth={1.5} />
       </div>
-      <p className="text-[14px] font-medium text-slate-600">No hay información para este contrato</p>
+      
       <p className="mt-1 max-w-xs text-[12.5px] text-slate-400">
-        Aún no se han registrado datos.
+        Aún no se han registrado datos para este contrato.
       </p>
     </div>
   );
