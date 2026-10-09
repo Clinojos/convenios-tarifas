@@ -388,6 +388,7 @@ export function Sidebar() {
             </div>
 
             <div className="py-1.5">
+              {/*
               <button
                 onClick={handleOpenAliasModal}
                 className="cursor-pointer w-full flex items-center gap-2.5 px-4 py-2.5 text-[12px] font-medium text-[#374151] hover:bg-[#F3F4F6] transition-colors"
@@ -395,6 +396,8 @@ export function Sidebar() {
                 <Pencil className="w-3.5 h-3.5 text-primary" />
                 Cambiar nombre
               </button>
+
+              */}
               <button
                 onClick={handleLogout}
                 className="cursor-pointer w-full flex items-center gap-2.5 px-4 py-2.5 text-[12px] font-medium text-[#374151] hover:bg-[#F3F4F6] transition-colors"

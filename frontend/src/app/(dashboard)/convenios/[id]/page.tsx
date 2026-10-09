@@ -81,7 +81,7 @@ function EmptyContractInfo() {
       </div>
       
       <p className="mt-1 max-w-xs text-[12.5px] text-slate-400">
-        Aún no se han registrado datos para este contrato.
+        Aún no se ha registrado infromación para este contrato.
       </p>
     </div>
   );

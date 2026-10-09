@@ -2,7 +2,7 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.exceptions import RequestValidationError
 from fastapi.responses import JSONResponse
-from .routes import auth, search, contracts, procedures, agreement, users
+from .routes import auth, search, procedures, agreement, users
 from .db import init_db  # Importamos la función de inicialización
 
 # Importante: hay que importar todos los modelos locales (SQLite) para que
@@ -47,7 +47,6 @@ def on_startup():
 # Registrar rutas
 app.include_router(auth.router)
 app.include_router(search.router)
-app.include_router(contracts.router)
 app.include_router(procedures.router)
 app.include_router(agreement.router)
 app.include_router(users.router)
